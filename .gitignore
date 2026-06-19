@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# Project Specific
+auth_state.json
+target_url.txt
+.env
+*.png
+!dashboard/**/*.png
+
+# Exclude temporary offline HTML logs / downloads from git tracking
+research/*.html
+research/FASIH_*_files/
+
+# IDEs and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.antigravitycli/
+.gemini/
+AGENT.md
