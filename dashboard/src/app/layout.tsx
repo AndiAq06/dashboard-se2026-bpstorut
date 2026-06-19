@@ -14,30 +14,30 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://fasih-sm-scrapper.vercel.app'),
-  title: "Dashboard Monitoring SE2026 - BPS Kabupaten Kepulauan Sangihe",
-  description: "Aplikasi monitoring real-time progres pendataan lapangan petugas Sensus Ekonomi 2026 BPS Kabupaten Kepulauan Sangihe.",
+  title: "Dashboard Monitoring SE2026 - BPS Kabupaten Toraja Utara",
+  description: "Aplikasi monitoring real-time progres pendataan lapangan petugas Sensus Ekonomi 2026 BPS Kabupaten Toraja Utara.",
   icons: {
     icon: "/icon.png",
     shortcut: "/icon.png",
     apple: "/icon.png",
   },
   openGraph: {
-    title: "Dashboard Monitoring SE2026 - BPS Kabupaten Kepulauan Sangihe",
-    description: "Aplikasi monitoring real-time progres pendataan lapangan petugas Sensus Ekonomi 2026 BPS Kabupaten Kepulauan Sangihe.",
+    title: "Dashboard Monitoring SE2026 - BPS Kabupaten Toraja Utara",
+    description: "Aplikasi monitoring real-time progres pendataan lapangan petugas Sensus Ekonomi 2026 BPS Kabupaten Toraja Utara.",
     images: [
       {
         url: "/icon.png",
         width: 512,
         height: 512,
-        alt: "Logo BPS Kabupaten Kepulauan Sangihe",
+        alt: "Logo BPS Kabupaten Toraja Utara",
       },
     ],
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Dashboard Monitoring SE2026 - BPS Kabupaten Kepulauan Sangihe",
-    description: "Aplikasi monitoring real-time progres pendataan lapangan petugas Sensus Ekonomi 2026 BPS Kabupaten Kepulauan Sangihe.",
+    title: "Dashboard Monitoring SE2026 - BPS Kabupaten Toraja Utara",
+    description: "Aplikasi monitoring real-time progres pendataan lapangan petugas Sensus Ekonomi 2026 BPS Kabupaten Toraja Utara.",
     images: ["/icon.png"],
   },
 };

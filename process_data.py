@@ -80,31 +80,114 @@ def load_priority_sls():
         return set()
 
 def load_muatan_wilkerstat():
-    excel_file = "muatan_wilkerstat.xlsx"
+    csv_file = "muatan_wilkerstat.csv"
     muatan_map = {}
+    if not os.path.exists(csv_file):
+        csv_file = os.path.join("data", "muatan_wilkerstat.csv")
+    
+    if os.path.exists(csv_file):
+        try:
+            with open(csv_file, mode='r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # Find columns case-insensitively
+                    sls_col = next((k for k in row.keys() if k.lower().strip() in ['kode_sls', 'idsls', 'sls_code']), None)
+                    muatan_col = next((k for k in row.keys() if k.lower().strip() in ['muatan', 'capacity', 'target']), None)
+                    ppl_col = next((k for k in row.keys() if k.lower().strip() in ['nama ppl', 'ppl', 'pencacah']), None)
+                    pml_col = next((k for k in row.keys() if k.lower().strip() in ['pml', 'pengawas']), None)
+                    
+                    if sls_col:
+                        sls_val = row[sls_col]
+                        if sls_val:
+                            sls_digits = "".join([c for c in str(sls_val) if c.isdigit()])
+                            sls_16 = sls_digits[:16]
+                            
+                            muatan_val = 0
+                            if muatan_col and row[muatan_col]:
+                                try:
+                                    muatan_val = int(row[muatan_col])
+                                except ValueError:
+                                    pass
+                                    
+                            ppl_name = ""
+                            if ppl_col and row[ppl_col]:
+                                ppl_name = row[ppl_col].strip()
+                                
+                            pml_name = ""
+                            if pml_col and row[pml_col]:
+                                pml_name = row[pml_col].strip()
+                                
+                            muatan_map[sls_16] = {
+                                'muatan': muatan_val,
+                                'ppl_name': ppl_name,
+                                'pml_name': pml_name
+                            }
+            print(f"Loaded {len(muatan_map)} Wilkerstat SLS capacity mappings from CSV '{csv_file}'.")
+            return muatan_map
+        except Exception as e:
+            print(f"Error loading Wilkerstat capacity from CSV: {e}")
+            
+    # Fallback to Excel
+    excel_file = "muatan_wilkerstat.xlsx"
     if not os.path.exists(excel_file):
-        print(f"Warning: Wilkerstat capacity file '{excel_file}' not found.")
-        return muatan_map
-    try:
-        import pandas as pd
-        df = pd.read_excel(excel_file)
-        for _, row in df.iterrows():
-            idsls_val = row.get('idsls')
-            muatan_val = row.get('muatan')
-            if pd.notna(idsls_val) and pd.notna(muatan_val):
-                idsls_str = str(int(idsls_val)).strip()
-                muatan_map[idsls_str] = int(muatan_val)
-        print(f"Loaded {len(muatan_map)} Wilkerstat SLS capacity mappings.")
-    except Exception as e:
-        print(f"Error loading Wilkerstat capacity: {e}")
+        excel_file = os.path.join("data", "muatan_wilkerstat.xlsx")
+        
+    if os.path.exists(excel_file):
+        try:
+            import pandas as pd
+            df = pd.read_excel(excel_file)
+            sls_col = next((c for c in df.columns if c.lower().strip() in ['kode_sls', 'idsls', 'sls_code']), None)
+            muatan_col = next((c for c in df.columns if c.lower().strip() in ['muatan', 'capacity', 'target']), None)
+            ppl_col = next((c for c in df.columns if c.lower().strip() in ['nama ppl', 'ppl', 'pencacah']), None)
+            pml_col = next((c for c in df.columns if c.lower().strip() in ['pml', 'pengawas']), None)
+            
+            for _, row in df.iterrows():
+                sls_val = row.get(sls_col) if sls_col else None
+                if pd.notna(sls_val):
+                    sls_digits = "".join([c for c in str(sls_val) if c.isdigit()])
+                    sls_16 = sls_digits[:16]
+                    
+                    muatan_val = 0
+                    if muatan_col and pd.notna(row.get(muatan_col)):
+                        muatan_val = int(row[muatan_col])
+                        
+                    ppl_name = ""
+                    if ppl_col and pd.notna(row.get(ppl_col)):
+                        ppl_name = str(row[ppl_col]).strip()
+                        
+                    pml_name = ""
+                    if pml_col and pd.notna(row.get(pml_col)):
+                        pml_name = str(row[pml_col]).strip()
+                        
+                    muatan_map[sls_16] = {
+                        'muatan': muatan_val,
+                        'ppl_name': ppl_name,
+                        'pml_name': pml_name
+                    }
+            print(f"Loaded {len(muatan_map)} Wilkerstat SLS capacity mappings from Excel.")
+        except Exception as e:
+            print(f"Error loading Wilkerstat capacity from Excel: {e}")
+            
     return muatan_map
+
+def normalize_name(name):
+    if not name:
+        return ""
+    n = name.lower().strip()
+    n = n.replace("yusuf tandi", "yusup tandi")
+    return n
 
 def process_dashboard_scraped_data(priority_sls=None):
     if priority_sls is None:
         priority_sls = load_priority_sls()
     scraped_file = "dashboard_scraped_data.csv"
     koseka_file = os.path.join("data", "koseka.csv")
-    pml_ppl_file = os.path.join("data", "pml_ppl.csv")
+    ppl_file = os.path.join("data", "email_ppl.csv")
+    if not os.path.exists(ppl_file):
+        ppl_file = "email_ppl.csv"
+    pml_file = os.path.join("data", "email_pml.csv")
+    if not os.path.exists(pml_file):
+        pml_file = "email_pml.csv"
     
     print("\n" + "="*50)
     print("PROCESSING DASHBOARD SCRAPED DATA")
@@ -118,8 +201,12 @@ def process_dashboard_scraped_data(priority_sls=None):
         print(f"Error: Koseka mapping file '{koseka_file}' not found. Cannot process.")
         return False
         
-    if not os.path.exists(pml_ppl_file):
-        print(f"Error: PML PPL file '{pml_ppl_file}' not found. Cannot process.")
+    if not os.path.exists(ppl_file):
+        print(f"Error: PPL email file '{ppl_file}' not found. Cannot process.")
+        return False
+
+    if not os.path.exists(pml_file):
+        print(f"Error: PML email file '{pml_file}' not found. Cannot process.")
         return False
 
     # 1. Load subdistrict and Koseka mapping
@@ -140,105 +227,178 @@ def process_dashboard_scraped_data(priority_sls=None):
         print(f"Error reading koseka file: {e}")
         return False
 
-    # 2. Load PML PPL mapping
-    print(f"Loading PML PPL mapping from '{pml_ppl_file}'...")
-    pml_ppl_map = {}
+    # 2. Load PML and PPL email mappings
+    ppl_email_to_name = {}
+    ppl_name_to_email = {}
     try:
-        with open(pml_ppl_file, mode='r', encoding='utf-8') as f:
-            reader = csv.DictReader(f, delimiter=',')
+        with open(ppl_file, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
             for row in reader:
+                name = row.get('Nama PPL', '').strip()
                 email = row.get('email', '').strip().lower()
                 if email:
-                    pml_ppl_map[email] = {
-                        'nama_petugas': row.get('nama_petugas', '').strip(),
-                        'jabatan_petugas': row.get('jabatan_petugas', '').strip(),
-                        'kec': row.get('kec', '').strip()
-                    }
-        print(f"Loaded {len(pml_ppl_map)} PML PPL mappings.")
+                    ppl_email_to_name[email] = name
+                    ppl_name_to_email[normalize_name(name)] = email
+        print(f"Loaded {len(ppl_email_to_name)} PPL email mappings.")
     except Exception as e:
-        print(f"Error reading pml_ppl file: {e}")
+        print(f"Error reading email_ppl file: {e}")
         return False
 
-    # 2b. Load Wilkerstat capacity mapping
-    muatan_map = load_muatan_wilkerstat()
+    pml_email_to_name = {}
+    pml_name_to_email = {}
+    try:
+        with open(pml_file, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = row.get('pml', '').strip()
+                email = row.get('email_pml', '').strip().lower()
+                if email:
+                    pml_email_to_name[email] = name
+                    pml_name_to_email[normalize_name(name)] = email
+        print(f"Loaded {len(pml_email_to_name)} PML email mappings.")
+    except Exception as e:
+        print(f"Error reading email_pml file: {e}")
+        return False
 
-    # 3. Read and process dashboard_scraped_data.csv
-    print(f"Processing '{scraped_file}'...")
-    processed_rows = []
-    headers = []
+    # 3. Load Wilkerstat capacity mapping
+    wilkerstat_map = load_muatan_wilkerstat()
+    if not wilkerstat_map:
+        print("Error: Wilkerstat capacity map is empty. Cannot map dashboard data.")
+        return False
+
+    # 4. Read the raw scraped progress counts from existing dashboard_scraped_data.csv
+    print(f"Loading raw scraped counts from '{scraped_file}'...")
+    scraped_counts = {}
     try:
         with open(scraped_file, mode='r', encoding='utf-8') as infile:
             reader = csv.reader(infile)
             try:
                 headers = next(reader)
             except StopIteration:
-                print("Error: dashboard_scraped_data.csv is empty.")
-                return False
-            
-            # Original 8 headers, we will append the 6 additional headers
-            additional_headers = ['nama_petugas', 'jabatan_petugas', 'nama_kec', 'koseka', 'is_prioritas', 'muatan_wilkerstat']
-            base_headers = headers[:8]
-            output_headers = base_headers + additional_headers
+                headers = []
             
             email_idx = 1
             sls_idx = 2
+            cat_idx = 0
+            
+            # Find status column positions
+            status_cols = ["OPEN", "DRAFT", "SUBMITTED BY Pencacah", "REJECTED BY Pengawas", "APPROVED BY Pengawas"]
+            status_indices = {col: headers.index(col) if col in headers else -1 for col in status_cols}
             
             for row in reader:
                 if not row or len(row) < 3:
                     continue
+                cat = row[cat_idx].strip()
+                email = row[email_idx].strip().lower()
+                sls_code = row[sls_idx].strip()
                 
-                base_row = row[:8]
-                while len(base_row) < 8:
-                    base_row.append('0')
-                
-                email = base_row[email_idx].strip().lower()
-                sls_code = base_row[sls_idx].strip()
-                
-                # Match email in PML PPL map
-                nama_petugas = ""
-                jabatan_petugas = ""
-                nama_kec_fallback = ""
-                if email in pml_ppl_map:
-                    nama_petugas = pml_ppl_map[email]['nama_petugas']
-                    jabatan_petugas = pml_ppl_map[email]['jabatan_petugas']
-                    nama_kec_fallback = pml_ppl_map[email].get('kec', '')
-                
-                # Match SLS Code in Koseka map
                 digits_only = "".join([c for c in sls_code if c.isdigit()])
-                kd_kec_7 = digits_only[:7]
-                
-                nama_kec = ""
-                koseka = ""
-                if kd_kec_7 in koseka_map:
-                    nama_kec = koseka_map[kd_kec_7]['nama_kec']
-                    koseka = koseka_map[kd_kec_7]['koseka']
-                
-                # Fallback to PML/PPL subdistrict if Koseka map didn't provide one
-                if not nama_kec:
-                    nama_kec = nama_kec_fallback
-                
-                # Match SLS Code in priority set
-                sls_14 = digits_only[:14]
-                is_prioritas = "Ya" if sls_14 in priority_sls else "Tidak"
-                
-                # Match SLS Code in Wilkerstat capacity map
                 sls_16 = digits_only[:16]
-                muatan_val = muatan_map.get(sls_16, 0)
                 
-                new_row = base_row + [nama_petugas, jabatan_petugas, nama_kec, koseka, is_prioritas, str(muatan_val)]
-                processed_rows.append(new_row)
+                key = (cat.lower(), email, sls_16)
                 
-        # Write processed data back to dashboard_scraped_data.csv
+                counts = {}
+                for col in status_cols:
+                    idx = status_indices[col]
+                    val = 0
+                    if idx != -1 and idx < len(row):
+                        try:
+                            val = int(row[idx])
+                        except ValueError:
+                            pass
+                    counts[col] = val
+                
+                scraped_counts[key] = counts
+        print(f"Loaded {len(scraped_counts)} raw scraped status rows.")
+    except Exception as e:
+        print(f"Warning loading existing scraped counts: {e}")
+
+    # 5. Build clean, aligned data based on Toraja Utara master list (wilkerstat_map)
+    print("Aligning and building aligned dashboard rows...")
+    aligned_rows = []
+    
+    # We output exactly the 14 headers:
+    output_headers = [
+        "Category", "Email", "SLS Code", 
+        "OPEN", "DRAFT", "SUBMITTED BY Pencacah", "REJECTED BY Pengawas", "APPROVED BY Pengawas",
+        "nama_petugas", "jabatan_petugas", "nama_kec", "koseka", "is_prioritas", "muatan_wilkerstat"
+    ]
+    
+    for sls_16, details in wilkerstat_map.items():
+        muatan = details['muatan']
+        ppl_name = details['ppl_name']
+        pml_name = details['pml_name']
+        
+        # Get emails from names
+        ppl_email = ppl_name_to_email.get(normalize_name(ppl_name), "")
+        pml_email = pml_name_to_email.get(normalize_name(pml_name), "")
+        
+        # Get subdistrict (kecamatan) mapping
+        kd_kec_7 = sls_16[:7]
+        nama_kec = ""
+        koseka = ""
+        if kd_kec_7 in koseka_map:
+            nama_kec = koseka_map[kd_kec_7]['nama_kec']
+            koseka = koseka_map[kd_kec_7]['koseka']
+            
+        # Get priority
+        sls_14 = sls_16[:14]
+        is_prioritas = "Ya" if sls_14 in priority_sls else "Tidak"
+        
+        # A. Create Pencacah row
+        ppl_key = ('pencacah', ppl_email, sls_16)
+        if ppl_key in scraped_counts:
+            counts = scraped_counts[ppl_key]
+        else:
+            # Initialize with target capacity as OPEN
+            counts = {
+                "OPEN": muatan,
+                "DRAFT": 0,
+                "SUBMITTED BY Pencacah": 0,
+                "REJECTED BY Pengawas": 0,
+                "APPROVED BY Pengawas": 0
+            }
+        
+        ppl_row = [
+            "Pencacah", ppl_email, sls_16,
+            str(counts["OPEN"]), str(counts["DRAFT"]), str(counts["SUBMITTED BY Pencacah"]),
+            str(counts["REJECTED BY Pengawas"]), str(counts["APPROVED BY Pengawas"]),
+            ppl_name, "PPL", nama_kec, koseka, is_prioritas, str(muatan)
+        ]
+        aligned_rows.append(ppl_row)
+        
+        # B. Create Pengawas row
+        pml_key = ('pengawas', pml_email, sls_16)
+        if pml_key in scraped_counts:
+            counts = scraped_counts[pml_key]
+        else:
+            counts = {
+                "OPEN": muatan,
+                "DRAFT": 0,
+                "SUBMITTED BY Pencacah": 0,
+                "REJECTED BY Pengawas": 0,
+                "APPROVED BY Pengawas": 0
+            }
+            
+        pml_row = [
+            "Pengawas", pml_email, sls_16,
+            str(counts["OPEN"]), str(counts["DRAFT"]), str(counts["SUBMITTED BY Pencacah"]),
+            str(counts["REJECTED BY Pengawas"]), str(counts["APPROVED BY Pengawas"]),
+            pml_name, "PML", nama_kec, koseka, is_prioritas, str(muatan)
+        ]
+        aligned_rows.append(pml_row)
+        
+    # Write clean aligned data back to dashboard_scraped_data.csv
+    try:
         with open(scraped_file, mode='w', newline='', encoding='utf-8') as outfile:
             writer = csv.writer(outfile)
             writer.writerow(output_headers)
-            writer.writerows(processed_rows)
-            
-        print(f"Successfully processed '{scraped_file}' with {len(processed_rows)} rows.")
+            writer.writerows(aligned_rows)
+        print(f"Successfully aligned and saved '{scraped_file}' with {len(aligned_rows)} rows.")
         generate_local_dashboard()
         return True
     except Exception as e:
-        print(f"Error processing dashboard scraped data: {e}")
+        print(f"Error writing aligned dashboard scraped data: {e}")
         return False
 
 def process_data():
@@ -280,6 +440,9 @@ def process_data():
         print(f"Error reading koseka file: {e}")
         return False
 
+    # Load Wilkerstat capacity mapping for Toraja Utara
+    wilkerstat_map = load_muatan_wilkerstat()
+
     # 2. Process scraped_data.csv and merge with existing output_file
     print(f"Processing, mapping, and merging '{scraped_file}'...")
     rows_written = 0
@@ -298,6 +461,8 @@ def process_data():
                         headers = next(reader)
                         if 'Kode Identitas' in headers:
                             id_code_idx = headers.index('Kode Identitas')
+                        else:
+                            id_code_idx = 1
                     except StopIteration:
                         headers = []
                     
@@ -306,10 +471,15 @@ def process_data():
                             continue
                         id_code = row[id_code_idx].strip()
                         if id_code:
+                            digits_only = "".join([c for c in id_code if c.isdigit()])
+                            sls_16 = digits_only[:16]
+                            if wilkerstat_map and sls_16 not in wilkerstat_map:
+                                continue # Filter out Sangihe or other non-Toraja Utara SLS codes
+                            
                             if len(row) > 7:
                                 row[7] = normalize_scale(row[7])
                             existing_data[id_code] = row
-                print(f"Loaded {len(existing_data)} existing records from '{output_file}'.")
+                print(f"Loaded {len(existing_data)} existing records from '{output_file}' (filtered for Toraja Utara).")
             except Exception as e:
                 print(f"Warning: Could not read existing output file for merging: {e}")
         
@@ -337,11 +507,15 @@ def process_data():
                 if not id_code:
                     continue  # Skip empty/invalid identity codes
                 
+                digits_only = "".join([c for c in id_code if c.isdigit()])
+                sls_16 = digits_only[:16]
+                if wilkerstat_map and sls_16 not in wilkerstat_map:
+                    continue # Skip non-Toraja Utara
+                
                 if len(row) > 7:
                     row[7] = normalize_scale(row[7])
                 
                 # Extract digits to match with kd_kec
-                digits_only = "".join([c for c in id_code if c.isdigit()])
                 kd_kec_7 = digits_only[:7]
                 
                 nama_kec = ""
@@ -360,7 +534,7 @@ def process_data():
                 
                 existing_data[id_code] = mapped_row
                 
-        print(f"Scraped data processed: {updated_rows_count} records updated, {new_rows_count} new records added.")
+        print(f"Scraped data processed: {updated_rows_count} records updated, {new_rows_count} new records added (filtered for Toraja Utara).")
         
         # Prepare list of rows to write and normalize columns to exactly 19 (16 base + 3 extra)
         rows_to_write = []
@@ -1254,7 +1428,17 @@ def get_dashboard_html_template():
                     <div class="kpi-value" id="kpiTotalSLS">0</div>
                 </div>
                 <div class="kpi-indicator" style="color: var(--text-muted)">
-                    Target Pencacahan Lapangan
+                    Jumlah SLS Terpetakan
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-title">Total Target Muatan</div>
+                    <div class="kpi-value" id="kpiTotalMuatan">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Target Rincian Usaha
                 </div>
             </div>
 
@@ -1531,20 +1715,29 @@ def get_dashboard_html_template():
                 totalMuatan += val.muatan;
             });
             
+            // Get values from official progresData if available, otherwise fallback to sums
+            const valApproved = (typeof progresData !== 'undefined' && progresData && 'APPROVED BY Pengawas' in progresData) ? parseInt(progresData['APPROVED BY Pengawas']) : totalApproved;
+            const valSubmitted = (typeof progresData !== 'undefined' && progresData && 'SUBMITTED BY Pencacah' in progresData) ? parseInt(progresData['SUBMITTED BY Pencacah']) : totalSubmitted;
+            const valDraft = (typeof progresData !== 'undefined' && progresData && 'DRAFT' in progresData) ? parseInt(progresData['DRAFT']) : totalDraft;
+            const valOpen = (typeof progresData !== 'undefined' && progresData && 'OPEN' in progresData) ? parseInt(progresData['OPEN']) : totalOpen;
+            const valRejected = (typeof progresData !== 'undefined' && progresData && 'REJECTED BY Pengawas' in progresData) ? parseInt(progresData['REJECTED BY Pengawas']) : totalRejected;
+            
             // Update fields
-            document.getElementById('kpiTotalSLS').textContent = totalMuatan.toLocaleString('id-ID');
-            document.getElementById('kpiOpen').textContent = totalOpen.toLocaleString('id-ID');
-            document.getElementById('kpiDraft').textContent = totalDraft.toLocaleString('id-ID');
-            document.getElementById('kpiSubmitted').textContent = totalSubmitted.toLocaleString('id-ID');
-            document.getElementById('kpiRejected').textContent = totalRejected.toLocaleString('id-ID');
-            document.getElementById('kpiApproved').textContent = totalApproved.toLocaleString('id-ID');
+            document.getElementById('kpiTotalSLS').textContent = uniqueSlsMap.size.toLocaleString('id-ID');
+            const scrapedTargetMuatan = (typeof assignData !== 'undefined' && assignData && assignData.assigned) ? parseInt(assignData.assigned) : totalMuatan;
+            document.getElementById('kpiTotalMuatan').textContent = scrapedTargetMuatan.toLocaleString('id-ID');
+            document.getElementById('kpiOpen').textContent = valOpen.toLocaleString('id-ID');
+            document.getElementById('kpiDraft').textContent = valDraft.toLocaleString('id-ID');
+            document.getElementById('kpiSubmitted').textContent = valSubmitted.toLocaleString('id-ID');
+            document.getElementById('kpiRejected').textContent = valRejected.toLocaleString('id-ID');
+            document.getElementById('kpiApproved').textContent = valApproved.toLocaleString('id-ID');
             
             // Progress Calculation
-            const completed = totalApproved + totalSubmitted + totalRejected;
-            const progressPct = totalMuatan > 0 ? (completed / totalMuatan) * 100 : 0;
+            const completed = valApproved + valSubmitted + valRejected;
+            const progressPct = scrapedTargetMuatan > 0 ? (completed / scrapedTargetMuatan) * 100 : 0;
             
             document.getElementById('kpiProgressPct').textContent = progressPct.toFixed(2) + '%';
-            document.getElementById('kpiProgressRatio').textContent = `${completed.toLocaleString('id-ID')} / ${totalMuatan.toLocaleString('id-ID')} Rincian Usaha`;
+            document.getElementById('kpiProgressRatio').textContent = `${completed.toLocaleString('id-ID')} / ${scrapedTargetMuatan.toLocaleString('id-ID')} Rincian Usaha`;
             document.getElementById('kpiProgressBar').style.width = progressPct.toFixed(2) + '%';
         }
 
@@ -1689,7 +1882,7 @@ def get_dashboard_html_template():
                 kecMap[kecName].SUBMITTED += sub;
                 kecMap[kecName].REJECTED += rej;
                 kecMap[kecName].APPROVED += app;
-                kecMap[kecName].total_sls += (open + draft + sub + rej + app);
+                kecMap[kecName].total_sls += 1;
                 kecMap[kecName].muatan += muatan;
             });
             
@@ -1718,7 +1911,7 @@ def get_dashboard_html_template():
                                 <tr>
                                     <th class="no-sort" style="width: 50px;">No</th>
                                     <th onclick="handleKecSort('nama_kec')">Kecamatan ${getSortArrow('nama_kec', sortKecField, sortKecAsc)}</th>
-                                    <th onclick="handleKecSort('total_sls')">Total Target SLS ${getSortArrow('total_sls', sortKecField, sortKecAsc)}</th>
+                                    <th onclick="handleKecSort('total_sls')">Jumlah SLS ${getSortArrow('total_sls', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('muatan')">Muatan Wilkerstat ${getSortArrow('muatan', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('OPEN')">Open ${getSortArrow('OPEN', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('DRAFT')">Draft ${getSortArrow('DRAFT', sortKecField, sortKecAsc)}</th>
@@ -1810,7 +2003,9 @@ def get_dashboard_html_template():
                 petMap[key].SUBMITTED += sub;
                 petMap[key].REJECTED += rej;
                 petMap[key].APPROVED += app;
-                petMap[key].total_sls += (open + draft + sub + rej + app);
+                if (row["SLS Code"]) {
+                    petMap[key].total_sls += 1;
+                }
                 petMap[key].muatan += muatan;
             });
             
@@ -1957,6 +2152,7 @@ def get_dashboard_html_template():
                                     <th onclick="handleDetSort('nama_kec')">Kecamatan ${getSortArrow('nama_kec', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('koseka')">Koseka ${getSortArrow('koseka', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('is_prioritas')">Prioritas ${getSortArrow('is_prioritas', sortDetField, sortDetAsc)}</th>
+                                    <th onclick="handleDetSort('muatan_wilkerstat')">Muatan ${getSortArrow('muatan_wilkerstat', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('OPEN')">Open ${getSortArrow('OPEN', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('DRAFT')">Draft ${getSortArrow('DRAFT', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('SUBMITTED BY Pencacah')">Submitted ${getSortArrow('SUBMITTED BY Pencacah', sortDetField, sortDetAsc)}</th>
@@ -1981,6 +2177,7 @@ def get_dashboard_html_template():
                         <td>${row.nama_kec || '-'}</td>
                         <td style="font-size: 0.8125rem;">${row.koseka || '-'}</td>
                         <td>${priorBadge}</td>
+                        <td>${row.muatan_wilkerstat}</td>
                         <td class="txt-open">${row.OPEN}</td>
                         <td class="txt-draft">${row.DRAFT}</td>
                         <td class="txt-submitted">${row["SUBMITTED BY Pencacah"]}</td>

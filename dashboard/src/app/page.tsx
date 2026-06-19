@@ -768,7 +768,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                BPS Kabupaten Kepulauan Sangihe
+                BPS Kabupaten Toraja Utara
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Dashboard Monitoring Sensus Ekonomi 2026
@@ -835,7 +835,7 @@ export default function DashboardPage() {
                 Dashboard Monitoring SE2026
               </h2>
               <p className="text-sm sm:text-lg text-orange-50 max-w-2xl font-light">
-                Pantau progres pendataan petugas Sensus Ekonomi 2026 secara akurat di wilayah Kabupaten Kepulauan Sangihe.
+                Pantau progres pendataan petugas Sensus Ekonomi 2026 secara akurat di wilayah Kabupaten Toraja Utara.
               </p>
             </div>
             
@@ -1572,7 +1572,7 @@ export default function DashboardPage() {
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 transition-colors">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span>&copy; 2026 Badan Pusat Statistik Kabupaten Kepulauan Sangihe. Hak Cipta Dilindungi.</span>
+          <span>&copy; 2026 Badan Pusat Statistik Kabupaten Toraja Utara. Hak Cipta Dilindungi.</span>
           <div className="flex items-center gap-3">
             <span className="font-semibold text-orange-500 flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5" />

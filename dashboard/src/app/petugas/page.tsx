@@ -770,7 +770,7 @@ export default function PetugasPage() {
             </div>
             <div>
               <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-                BPS Kabupaten Kepulauan Sangihe
+                BPS Kabupaten Toraja Utara
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Dashboard Monitoring Sensus Ekonomi 2026
