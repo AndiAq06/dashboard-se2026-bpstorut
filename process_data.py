@@ -1450,8 +1450,8 @@ def get_dashboard_html_template():
             // Get unique kecamatan from data
             const kecSet = new Set();
             rawScrapedData.forEach(row => {
-                const kecName = row.nama_kec || row.kd_kec;
-                if (kecName && kecName.trim() !== '') {
+                const kecName = row.nama_kec || '';
+                if (kecName && kecName.trim() !== '' && kecName.trim() !== 'TIDAK TERIDENTIFIKASI') {
                     kecSet.add(kecName.trim());
                 }
             });
@@ -1631,8 +1631,9 @@ def get_dashboard_html_template():
                     processedSls.add(slsCode);
                 }
                 
-                let kecName = row.nama_kec || 'TIDAK TERIDENTIFIKASI';
+                let kecName = row.nama_kec || '';
                 kecName = kecName.trim();
+                if (!kecName || kecName === 'TIDAK TERIDENTIFIKASI') return;
                 
                 if (!kecMap[kecName]) {
                     kecMap[kecName] = {
