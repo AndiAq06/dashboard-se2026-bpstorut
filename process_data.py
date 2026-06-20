@@ -817,9 +817,9 @@ def get_dashboard_html_template():
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #0f766e;
-            --primary-light: #14b8a6;
-            --primary-bg: #f0fdfa;
+            --primary: #ea580c;       /* Sensus Ekonomi 2026 Orange */
+            --primary-light: #f97316; /* Lighter Orange */
+            --primary-bg: #fff7ed;    /* Light Orange Background tint */
             --background: #f8fafc;
             --card-bg: #ffffff;
             --text-main: #0f172a;
@@ -940,7 +940,7 @@ def get_dashboard_html_template():
         }
 
         .kpi-card.progress-card {
-            background: linear-gradient(135deg, var(--primary), #0d9488);
+            background: linear-gradient(135deg, var(--primary), #f97316);
             color: white;
             grid-column: span 2;
         }
@@ -958,6 +958,7 @@ def get_dashboard_html_template():
             color: var(--text-muted);
             font-weight: 600;
             margin-bottom: 0.5rem;
+            min-height: 2.25rem;
         }
 
         .progress-card .kpi-title {
@@ -1091,7 +1092,7 @@ def get_dashboard_html_template():
 
         .control-input:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+            box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15);
         }
 
         .btn-clear {
@@ -1444,6 +1445,16 @@ def get_dashboard_html_template():
 
             <div class="kpi-card">
                 <div>
+                    <div class="kpi-title">Total Muatan Wilkerstat</div>
+                    <div class="kpi-value" id="kpiTotalWilkerstat">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Muatan Wilkerstat Keseluruhan
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
                     <div class="kpi-title">APPROVED PML</div>
                     <div class="kpi-value txt-approved" id="kpiApproved">0</div>
                 </div>
@@ -1604,6 +1615,12 @@ def get_dashboard_html_template():
         let sortPetAsc = true;
         let sortDetField = 'SLS Code';
         let sortDetAsc = true;
+
+        // Numeric fields to default sort descending on first click
+        const numericFields = [
+            'total_sls', 'muatan', 'OPEN', 'DRAFT', 'SUBMITTED', 'REJECTED', 'APPROVED', 'progress_rate',
+            'muatan_wilkerstat', 'SUBMITTED BY Pencacah', 'REJECTED BY Pengawas', 'APPROVED BY Pengawas'
+        ];
         
         // Pagination state for Detail SLS
         let detailCurrentPage = 1;
@@ -1726,6 +1743,7 @@ def get_dashboard_html_template():
             document.getElementById('kpiTotalSLS').textContent = uniqueSlsMap.size.toLocaleString('id-ID');
             const scrapedTargetMuatan = (typeof assignData !== 'undefined' && assignData && assignData.assigned) ? parseInt(assignData.assigned) : totalMuatan;
             document.getElementById('kpiTotalMuatan').textContent = scrapedTargetMuatan.toLocaleString('id-ID');
+            document.getElementById('kpiTotalWilkerstat').textContent = totalMuatan.toLocaleString('id-ID');
             document.getElementById('kpiOpen').textContent = valOpen.toLocaleString('id-ID');
             document.getElementById('kpiDraft').textContent = valDraft.toLocaleString('id-ID');
             document.getElementById('kpiSubmitted').textContent = valSubmitted.toLocaleString('id-ID');
@@ -1963,7 +1981,7 @@ def get_dashboard_html_template():
                 sortKecAsc = !sortKecAsc;
             } else {
                 sortKecField = field;
-                sortKecAsc = true;
+                sortKecAsc = !numericFields.includes(field);
             }
             renderActiveTab();
         }
@@ -2087,7 +2105,7 @@ def get_dashboard_html_template():
                 sortPetAsc = !sortPetAsc;
             } else {
                 sortPetField = field;
-                sortPetAsc = true;
+                sortPetAsc = !numericFields.includes(field);
             }
             renderActiveTab();
         }
@@ -2219,7 +2237,7 @@ def get_dashboard_html_template():
                 sortDetAsc = !sortDetAsc;
             } else {
                 sortDetField = field;
-                sortDetAsc = true;
+                sortDetAsc = !numericFields.includes(field);
             }
             detailCurrentPage = 1;
             renderActiveTab();
@@ -2232,7 +2250,9 @@ def get_dashboard_html_template():
 
         // Get sort arrow visual indicators
         function getSortArrow(field, currentSortField, isAsc) {
-            if (field !== currentSortField) return '';
+            if (field !== currentSortField) {
+                return '<span class="sort-indicator" style="opacity: 0.35;">⇅</span>';
+            }
             return isAsc ? '<span class="sort-indicator">▲</span>' : '<span class="sort-indicator">▼</span>';
         }
 
