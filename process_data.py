@@ -1435,7 +1435,7 @@ def get_dashboard_html_template():
 
             <div class="kpi-card">
                 <div>
-                    <div class="kpi-title">Total Target Muatan</div>
+                    <div class="kpi-title">Total Muatan</div>
                     <div class="kpi-value" id="kpiTotalMuatan">0</div>
                 </div>
                 <div class="kpi-indicator" style="color: var(--text-muted)">
