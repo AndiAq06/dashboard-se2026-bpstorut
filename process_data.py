@@ -88,40 +88,49 @@ def load_muatan_wilkerstat():
     if os.path.exists(csv_file):
         try:
             with open(csv_file, mode='r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    # Find columns case-insensitively
-                    sls_col = next((k for k in row.keys() if k.lower().strip() in ['kode_sls', 'idsls', 'sls_code']), None)
-                    muatan_col = next((k for k in row.keys() if k.lower().strip() in ['muatan', 'capacity', 'target']), None)
-                    ppl_col = next((k for k in row.keys() if k.lower().strip() in ['nama ppl', 'ppl', 'pencacah']), None)
-                    pml_col = next((k for k in row.keys() if k.lower().strip() in ['pml', 'pengawas']), None)
-                    
-                    if sls_col:
-                        sls_val = row[sls_col]
-                        if sls_val:
-                            sls_digits = "".join([c for c in str(sls_val) if c.isdigit()])
-                            sls_16 = sls_digits[:16]
+                lines = []
+                for line in f:
+                    stripped = line.strip()
+                    if stripped.startswith('"') and stripped.endswith('"') and stripped.count('"') >= 4:
+                        cleaned = stripped[1:-1].replace('""', '"')
+                        lines.append(cleaned + '\n')
+                    else:
+                        lines.append(line)
+            
+            reader = csv.DictReader(lines)
+            for row in reader:
+                # Find columns case-insensitively
+                sls_col = next((k for k in row.keys() if k and k.lower().strip() in ['kode_sls', 'idsls', 'sls_code']), None)
+                muatan_col = next((k for k in row.keys() if k.lower().strip() in ['muatan', 'capacity', 'target']), None)
+                ppl_col = next((k for k in row.keys() if k.lower().strip() in ['nama ppl', 'ppl', 'pencacah']), None)
+                pml_col = next((k for k in row.keys() if k.lower().strip() in ['pml', 'pengawas']), None)
+                
+                if sls_col:
+                    sls_val = row[sls_col]
+                    if sls_val:
+                        sls_digits = "".join([c for c in str(sls_val) if c.isdigit()])
+                        sls_16 = sls_digits[:16]
+                        
+                        muatan_val = 0
+                        if muatan_col and row[muatan_col]:
+                            try:
+                                muatan_val = int(row[muatan_col])
+                            except ValueError:
+                                pass
+                                
+                        ppl_name = ""
+                        if ppl_col and row[ppl_col]:
+                            ppl_name = row[ppl_col].strip()
                             
-                            muatan_val = 0
-                            if muatan_col and row[muatan_col]:
-                                try:
-                                    muatan_val = int(row[muatan_col])
-                                except ValueError:
-                                    pass
-                                    
-                            ppl_name = ""
-                            if ppl_col and row[ppl_col]:
-                                ppl_name = row[ppl_col].strip()
-                                
-                            pml_name = ""
-                            if pml_col and row[pml_col]:
-                                pml_name = row[pml_col].strip()
-                                
-                            muatan_map[sls_16] = {
-                                'muatan': muatan_val,
-                                'ppl_name': ppl_name,
-                                'pml_name': pml_name
-                            }
+                        pml_name = ""
+                        if pml_col and row[pml_col]:
+                            pml_name = row[pml_col].strip()
+                            
+                        muatan_map[sls_16] = {
+                            'muatan': muatan_val,
+                            'ppl_name': ppl_name,
+                            'pml_name': pml_name
+                        }
             print(f"Loaded {len(muatan_map)} Wilkerstat SLS capacity mappings from CSV '{csv_file}'.")
             return muatan_map
         except Exception as e:
@@ -305,6 +314,29 @@ def process_dashboard_scraped_data(priority_sls=None):
     except Exception as e:
         print(f"Error reading email_pml file: {e}")
         return False
+
+    # Supplement using data/pml_ppl.csv if available
+    pml_ppl_file = os.path.join("data", "pml_ppl.csv")
+    if os.path.exists(pml_ppl_file):
+        print(f"Loading unified PML/PPL email mappings from '{pml_ppl_file}'...")
+        try:
+            with open(pml_ppl_file, mode='r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    name = row.get('nama_petugas', '').strip()
+                    email = row.get('email', '').strip().lower()
+                    role = row.get('jabatan_petugas', '').strip().upper()
+                    if email and name:
+                        if role == "PPL":
+                            ppl_email_to_name[email] = name
+                            ppl_name_to_email[normalize_name(name)] = email
+                        elif role == "PML":
+                            pml_email_to_name[email] = name
+                            pml_name_to_email[normalize_name(name)] = email
+            print(f"Successfully supplemented email mappings using unified file. PPL map size: {len(ppl_name_to_email)}, PML map size: {len(pml_name_to_email)}")
+        except Exception as e:
+            print(f"Warning: Failed to parse unified mapping '{pml_ppl_file}': {e}")
+
 
     # 3. Load Wilkerstat capacity mapping
     wilkerstat_map = load_muatan_wilkerstat()
