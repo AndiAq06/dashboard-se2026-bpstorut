@@ -87,6 +87,9 @@ interface KecamatanStats {
   total: number;
   progress: number;
   realisasi: number;
+  kkExcel?: number;
+  usahaExcel?: number;
+  bangunanExcel?: number;
   pmlList: {
     namaPetugas: string;
     email: string;
@@ -106,6 +109,7 @@ export default function PetugasPage() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [rawData, setRawData] = useState<DashboardRecord[]>([]);
   const [excelTargets, setExcelTargets] = useState<any>({});
+  const [excelKecTargets, setExcelKecTargets] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
@@ -138,6 +142,7 @@ export default function PetugasPage() {
         if (targetsRes.ok) {
           const targetsData = await targetsRes.json();
           setExcelTargets(targetsData.targets || {});
+          setExcelKecTargets(targetsData.kec_targets || {});
         }
       } catch (e) {
         console.warn("Gagal memuat petugas_excel_targets.json:", e);
@@ -385,12 +390,17 @@ export default function PetugasPage() {
 
     return Object.values(map).map(k => {
       const { pmlMap, ...rest } = k;
+      const normKec = k.namaKec.split("(")[0].trim().toLowerCase().replace(/ /g, "").replace(/-/g, "").replace(/_/g, "").replace(/'/g, "").replace(/`/g, "").replace(/\./g, "");
+      const targets = excelKecTargets[normKec] || { kk: 0, usaha: 0, bangunan: 0 };
       return {
         ...rest,
+        kkExcel: targets.kk || 0,
+        usahaExcel: targets.usaha || 0,
+        bangunanExcel: targets.bangunan || 0,
         pmlList: Object.values(pmlMap)
       };
     });
-  }, [rawData]);
+  }, [rawData, excelKecTargets]);
 
   // Unique Kecamatan List for filters
   const subdistrictOptions = useMemo(() => {
@@ -1113,7 +1123,7 @@ export default function PetugasPage() {
                           <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900">SLS</th>
                         </>
                       )}
-                      {(activeTab === "pcl" || activeTab === "pml") && (
+                      {(activeTab === "pcl" || activeTab === "pml" || activeTab === "kecamatan") && (
                         <>
                           <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900 text-amber-600 dark:text-amber-400">KK</th>
                           <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900 text-blue-600 dark:text-blue-400">Usaha</th>
@@ -1134,7 +1144,7 @@ export default function PetugasPage() {
                     {activeTab === "kecamatan" ? (
                       filteredKecamatans.length === 0 ? (
                         <tr>
-                          <td colSpan={14} className="py-10 text-center text-slate-500 dark:text-slate-400 text-xs">
+                          <td colSpan={15} className="py-10 text-center text-slate-500 dark:text-slate-400 text-xs">
                             Tidak ada data kecamatan yang cocok dengan filter atau pencarian Anda.
                           </td>
                         </tr>
@@ -1170,6 +1180,9 @@ export default function PetugasPage() {
                                 </td>
                                 <td className="py-3 px-4 font-normal">{k.pmlList.length} PML</td>
                                 <td className="py-3 px-4 text-center font-normal">{k.slsCount}</td>
+                                <td className="py-3 px-4 text-center font-semibold text-orange-600 dark:text-orange-400">{(k.kkExcel || 0).toLocaleString("id-ID")}</td>
+                                <td className="py-3 px-4 text-center font-semibold text-blue-600 dark:text-blue-400">{(k.usahaExcel || 0).toLocaleString("id-ID")}</td>
+                                <td className="py-3 px-4 text-center font-semibold text-purple-600 dark:text-purple-400">{(k.bangunanExcel || 0).toLocaleString("id-ID")}</td>
                                 <td className="py-3 px-4 text-center font-semibold text-slate-800 dark:text-slate-200">{k.total}</td>
                                 <td className="py-3 px-4 text-center font-normal text-blue-500/90">{k.draft}</td>
                                 <td className="py-3 px-4 text-center font-normal text-teal-500/90">{k.submit}</td>
@@ -1195,7 +1208,7 @@ export default function PetugasPage() {
                               {/* Expanded PML List in Kecamatan Row */}
                               {isExpanded && (
                                 <tr className="bg-slate-50/20 dark:bg-slate-950/20 border-b border-slate-200 dark:border-slate-800">
-                                  <td colSpan={14} className="py-4 px-8">
+                                  <td colSpan={15} className="py-4 px-8">
                                     <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 p-4 shadow-inner">
                                       <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
                                         <UserCheck className="w-3.5 h-3.5 text-orange-500" />

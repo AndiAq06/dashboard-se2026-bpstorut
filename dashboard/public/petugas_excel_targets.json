@@ -2395,5 +2395,112 @@
       "usaha": 217,
       "bangunan": 251
     }
+  },
+  "kec_targets": {
+    "bangkelekila": {
+      "kk": 1709,
+      "usaha": 147,
+      "bangunan": 668
+    },
+    "rantepao": {
+      "kk": 6248,
+      "usaha": 2603,
+      "bangunan": 460
+    },
+    "tikala": {
+      "kk": 2801,
+      "usaha": 243,
+      "bangunan": 437
+    },
+    "sesean": {
+      "kk": 3803,
+      "usaha": 365,
+      "bangunan": 971
+    },
+    "buntao": {
+      "kk": 2859,
+      "usaha": 329,
+      "bangunan": 276
+    },
+    "rindingallo": {
+      "kk": 2390,
+      "usaha": 367,
+      "bangunan": 722
+    },
+    "dendepiongannapo": {
+      "kk": 2344,
+      "usaha": 1411,
+      "bangunan": 346
+    },
+    "tondon": {
+      "kk": 3302,
+      "usaha": 395,
+      "bangunan": 505
+    },
+    "buntupepasan": {
+      "kk": 3191,
+      "usaha": 269,
+      "bangunan": 912
+    },
+    "sanggalangi": {
+      "kk": 3395,
+      "usaha": 435,
+      "bangunan": 535
+    },
+    "sa'dan": {
+      "kk": 4238,
+      "usaha": 442,
+      "bangunan": 1014
+    },
+    "baruppu": {
+      "kk": 1603,
+      "usaha": 217,
+      "bangunan": 251
+    },
+    "seseansuloara": {
+      "kk": 1597,
+      "usaha": 163,
+      "bangunan": 455
+    },
+    "tallunglipu": {
+      "kk": 5632,
+      "usaha": 1955,
+      "bangunan": 522
+    },
+    "sopai": {
+      "kk": 4027,
+      "usaha": 614,
+      "bangunan": 255
+    },
+    "nanggala": {
+      "kk": 3111,
+      "usaha": 486,
+      "bangunan": 597
+    },
+    "kesu": {
+      "kk": 4639,
+      "usaha": 903,
+      "bangunan": 277
+    },
+    "kapalapitu": {
+      "kk": 1770,
+      "usaha": 160,
+      "bangunan": 173
+    },
+    "rantebua": {
+      "kk": 2240,
+      "usaha": 534,
+      "bangunan": 315
+    },
+    "balusu": {
+      "kk": 2549,
+      "usaha": 249,
+      "bangunan": 568
+    },
+    "awanrantekarua": {
+      "kk": 1424,
+      "usaha": 75,
+      "bangunan": 214
+    }
   }
 }

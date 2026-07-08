@@ -225,9 +225,24 @@ def load_excel_wilkerstat_kk_usaha():
         
     return excel_wilkerstat_map
 
+def clean_kec_name_for_matching(name):
+    if not name:
+        return ""
+    # Strip leading digits and hyphen (e.g. 140-BANGKELEKILA -> BANGKELEKILA)
+    n = str(name).strip()
+    if "-" in n:
+        parts = n.split("-", 1)
+        if parts[0].strip().isdigit():
+            n = parts[1].strip()
+    # Normalize spaces, casing, and common separators
+    n = n.lower().strip()
+    n = n.replace(" ", "").replace("-", "").replace("_", "")
+    return n
+
 def load_excel_kk_usaha_bangunan_ppl():
     excel_file = "Jumlah KK_Usaha_Bangunan.xlsx"
     ppl_map = {}
+    kec_map = {}
     if not os.path.exists(excel_file):
         excel_file = os.path.join("data", "Jumlah KK_Usaha_Bangunan.xlsx")
         
@@ -237,6 +252,7 @@ def load_excel_kk_usaha_bangunan_ppl():
             # Header is at row index 3 (0-indexed)
             df = pd.read_excel(excel_file, header=3)
             ppl_col = next((c for c in df.columns if 'nama ppl' in str(c).lower()), None)
+            kec_col = next((c for c in df.columns if 'kecamatan' in str(c).lower()), None)
             kk_col = next((c for c in df.columns if 'jumlah kk' in str(c).lower()), None)
             usaha_col = next((c for c in df.columns if 'jumlah usaha' in str(c).lower()), None)
             bangunan_col = next((c for c in df.columns if 'jumlah bangunan' in str(c).lower()), None)
@@ -279,16 +295,28 @@ def load_excel_kk_usaha_bangunan_ppl():
                     ppl_map[norm_name]['kk'] += kk_val
                     ppl_map[norm_name]['usaha'] += usaha_val
                     ppl_map[norm_name]['bangunan'] += bangunan_val
-            print(f"Loaded {len(ppl_map)} PPL target entries from Excel '{excel_file}'.")
+
+                    # Kecamatan matching
+                    kec_val = row.get(kec_col) if kec_col else None
+                    if pd.notna(kec_val):
+                        norm_kec = clean_kec_name_for_matching(kec_val)
+                        if norm_kec:
+                            if norm_kec not in kec_map:
+                                kec_map[norm_kec] = {'kk': 0, 'usaha': 0, 'bangunan': 0}
+                            kec_map[norm_kec]['kk'] += kk_val
+                            kec_map[norm_kec]['usaha'] += usaha_val
+                            kec_map[norm_kec]['bangunan'] += bangunan_val
+
+            print(f"Loaded {len(ppl_map)} PPL target entries and {len(kec_map)} Kecamatan target entries from Excel '{excel_file}'.")
         except Exception as e:
             print(f"Warning: Failed to parse '{excel_file}': {e}")
     else:
         print(f"Warning: Excel file '{excel_file}' not found.")
         
-    return ppl_map
+    return ppl_map, kec_map
 
 def generate_and_save_petugas_excel_targets(wilkerstat_map, ppl_name_to_email, pml_name_to_email):
-    excel_ppl_map = load_excel_kk_usaha_bangunan_ppl()
+    excel_ppl_map, excel_kec_map = load_excel_kk_usaha_bangunan_ppl()
     
     # 1. Map PML to their assigned PPLs
     pml_to_ppls = {}
@@ -321,7 +349,8 @@ def generate_and_save_petugas_excel_targets(wilkerstat_map, ppl_name_to_email, p
             'usaha': total_usaha,
             'bangunan': total_bangunan
         },
-        'targets': {}
+        'targets': {},
+        'kec_targets': excel_kec_map
     }
     
     # Add PPLs by name and email
@@ -1915,6 +1944,19 @@ def get_dashboard_html_template():
             return 'PPL'; // Fallback
         }
 
+        // Helper to normalize subdistrict name for targets matching
+        function cleanKecNameForMatching(name) {
+            if (!name) return "";
+            let n = name.split("(")[0].trim();
+            if (n.includes("-")) {
+                const parts = n.split("-");
+                if (!isNaN(parts[0].trim())) {
+                    n = parts.slice(1).join("-").trim();
+                }
+            }
+            return n.toLowerCase().replace(/ /g, "").replace(/-/g, "").replace(/_/g, "").replace(/'/g, "").replace(/`/g, "").replace(/\./g, "");
+        }
+
         // Global variables state
         let currentTab = 'kecamatan';
         let searchQuery = '';
@@ -2200,7 +2242,6 @@ def get_dashboard_html_template():
             container.appendChild(tabDiv);
         }
 
-        // Tab 1: Rekap Kecamatan
         function renderKecamatanTab(tabDiv, filteredData) {
             // Aggregate by Kecamatan, counting each SLS Code only once
             const kecMap = {};
@@ -2218,6 +2259,11 @@ def get_dashboard_html_template():
                 if (!kecName || kecName === 'TIDAK TERIDENTIFIKASI') return;
                 
                 if (!kecMap[kecName]) {
+                    const normKec = cleanKecNameForMatching(kecName);
+                    const targets = (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.kec_targets)
+                        ? (PETUGAS_EXCEL_TARGETS.kec_targets[normKec] || { kk: 0, usaha: 0, bangunan: 0 })
+                        : { kk: 0, usaha: 0, bangunan: 0 };
+
                     kecMap[kecName] = {
                         nama_kec: kecName,
                         total_sls: 0,
@@ -2226,7 +2272,10 @@ def get_dashboard_html_template():
                         DRAFT: 0,
                         SUBMITTED: 0,
                         REJECTED: 0,
-                        APPROVED: 0
+                        APPROVED: 0,
+                        kk_excel: targets.kk || 0,
+                        usaha_excel: targets.usaha || 0,
+                        bangunan_excel: targets.bangunan || 0
                     };
                 }
                 
@@ -2273,6 +2322,9 @@ def get_dashboard_html_template():
                                     <th onclick="handleKecSort('nama_kec')">Kecamatan ${getSortArrow('nama_kec', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('total_sls')">Jumlah SLS ${getSortArrow('total_sls', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('muatan')">Muatan Wilkerstat ${getSortArrow('muatan', sortKecField, sortKecAsc)}</th>
+                                    <th onclick="handleKecSort('kk_excel')">KK ${getSortArrow('kk_excel', sortKecField, sortKecAsc)}</th>
+                                    <th onclick="handleKecSort('usaha_excel')">Usaha ${getSortArrow('usaha_excel', sortKecField, sortKecAsc)}</th>
+                                    <th onclick="handleKecSort('bangunan_excel')">Bangunan ${getSortArrow('bangunan_excel', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('DRAFT')">Draft ${getSortArrow('DRAFT', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('SUBMITTED')">Submitted ${getSortArrow('SUBMITTED', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('REJECTED')">Rejected ${getSortArrow('REJECTED', sortKecField, sortKecAsc)}</th>
@@ -2290,6 +2342,9 @@ def get_dashboard_html_template():
                         <td style="font-weight: 600; color: var(--primary)">${kec.nama_kec}</td>
                         <td style="font-weight: 500;">${kec.total_sls.toLocaleString('id-ID')}</td>
                         <td style="font-weight: 500; color: #475569;">${kec.muatan.toLocaleString('id-ID')}</td>
+                        <td style="font-weight: 600; color: #d97706;">${(kec.kk_excel || 0).toLocaleString('id-ID')}</td>
+                        <td style="font-weight: 600; color: #2563eb;">${(kec.usaha_excel || 0).toLocaleString('id-ID')}</td>
+                        <td style="font-weight: 600; color: #7c3aed;">${(kec.bangunan_excel || 0).toLocaleString('id-ID')}</td>
                         <td class="txt-draft">${kec.DRAFT.toLocaleString('id-ID')}</td>
                         <td class="txt-submitted">${kec.SUBMITTED.toLocaleString('id-ID')}</td>
                         <td class="txt-rejected">${kec.REJECTED.toLocaleString('id-ID')}</td>
