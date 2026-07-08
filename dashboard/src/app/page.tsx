@@ -932,7 +932,7 @@ export default function DashboardPage() {
                 </span>
                 <span className="text-xs text-slate-400 mt-2 block flex items-center gap-1">
                   <Layers className="w-3.5 h-3.5 text-amber-500" />
-                  Target KK dari berkas PPL
+                  Target KK dari wilkerstat
                 </span>
               </motion.div>
 
@@ -950,7 +950,7 @@ export default function DashboardPage() {
                 </span>
                 <span className="text-xs text-slate-400 mt-2 block flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-                  Target usaha non-tani berkas PPL
+                  Target usaha non-tani wilkerstat
                 </span>
               </motion.div>
 
@@ -968,7 +968,7 @@ export default function DashboardPage() {
                 </span>
                 <span className="text-xs text-slate-400 mt-2 block flex items-center gap-1">
                   <Building className="w-3.5 h-3.5 text-purple-500" />
-                  Target bangunan bukan tempat tinggal
+                  Target bangunan bukan tempat tinggal wilkerstat
                 </span>
               </motion.div>
 

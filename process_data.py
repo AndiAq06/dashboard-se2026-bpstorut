@@ -1746,7 +1746,7 @@ def get_dashboard_html_template():
                     <div class="kpi-value" id="kpiTotalKKExcel" style="color: #ea580c;">0</div>
                 </div>
                 <div class="kpi-indicator" style="color: var(--text-muted)">
-                    Total Target KK dari Excel PPL
+                    Total Target KK dari wilkerstat
                 </div>
             </div>
 
@@ -1756,7 +1756,7 @@ def get_dashboard_html_template():
                     <div class="kpi-value" id="kpiTotalUsahaExcel" style="color: #2563eb;">0</div>
                 </div>
                 <div class="kpi-indicator" style="color: var(--text-muted)">
-                    Total Target Usaha dari Excel PPL
+                    Total Target Usaha dari wilkerstat
                 </div>
             </div>
 
@@ -1766,7 +1766,7 @@ def get_dashboard_html_template():
                     <div class="kpi-value" id="kpiTotalBangunanExcel" style="color: #7c3aed;">0</div>
                 </div>
                 <div class="kpi-indicator" style="color: var(--text-muted)">
-                    Total Target Bangunan dari Excel PPL
+                    Total Target Bangunan dari wilkerstat
                 </div>
             </div>
 
