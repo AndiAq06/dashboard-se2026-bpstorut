@@ -70,6 +70,9 @@ interface OfficerStats {
   total: number;
   progress: number; // sum of draft + submit + reject + approve
   realisasi: number; // sum of draft + submit + reject + approve
+  kkExcel?: number;
+  usahaExcel?: number;
+  bangunanExcel?: number;
 }
 
 // Interface for aggregated kecamatan stats (grouped PML data)
@@ -102,6 +105,7 @@ interface KecamatanStats {
 export default function PetugasPage() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [rawData, setRawData] = useState<DashboardRecord[]>([]);
+  const [excelTargets, setExcelTargets] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
@@ -127,6 +131,17 @@ export default function PetugasPage() {
       const text = await response.text();
       const parsed = parseCSV(text);
       setRawData(parsed);
+
+      // Fetch petugas_excel_targets.json
+      try {
+        const targetsRes = await fetch(`/petugas_excel_targets.json?t=${Date.now()}`);
+        if (targetsRes.ok) {
+          const targetsData = await targetsRes.json();
+          setExcelTargets(targetsData.targets || {});
+        }
+      } catch (e) {
+        console.warn("Gagal memuat petugas_excel_targets.json:", e);
+      }
 
       // Fetch last updated timestamp
       try {
@@ -218,6 +233,9 @@ export default function PetugasPage() {
       if (!email) return;
 
       if (!map[email]) {
+        const nameClean = (record.namaPetugas || "").split(",")[0].toLowerCase().trim().replace(/\./g, "").replace(/'/g, "").replace(/`/g, "");
+        const targets = excelTargets[email] || excelTargets[nameClean] || { kk: 0, usaha: 0, bangunan: 0 };
+
         map[email] = {
           namaPetugas: record.namaPetugas || email.split("@")[0],
           email: record.email,
@@ -233,7 +251,10 @@ export default function PetugasPage() {
           approve: 0,
           total: 0,
           progress: 0,
-          realisasi: 0
+          realisasi: 0,
+          kkExcel: targets.kk || 0,
+          usahaExcel: targets.usaha || 0,
+          bangunanExcel: targets.bangunan || 0
         };
       }
 
@@ -265,7 +286,7 @@ export default function PetugasPage() {
     });
 
     return Object.values(map);
-  }, [rawData]);
+  }, [rawData, excelTargets]);
 
   // Aggregate stats by kecamatan (summing PML data)
   const kecamatanStats = useMemo(() => {
@@ -630,7 +651,7 @@ export default function PetugasPage() {
     if (activeTab === "kecamatan") {
       const headers = [
         "Nama Kecamatan", "Jumlah PML", "Jumlah SLS", 
-        "Total Target", "OPEN", "DRAFT", "SUBMITTED BY Pencacah", 
+        "Total Target", "DRAFT", "SUBMITTED BY Pencacah", 
         "REJECTED BY Pengawas", "APPROVED BY Pengawas", "Progres / Realisasi", "Realisasi (%)"
       ];
       const csvRows = [headers.join(",")];
@@ -642,7 +663,6 @@ export default function PetugasPage() {
           k.pmlList.length,
           k.slsCount,
           k.total,
-          k.open,
           k.draft,
           k.submit,
           k.reject,
@@ -667,7 +687,7 @@ export default function PetugasPage() {
     if (activeTab === "prioritas") {
       const headers = [
         "Kode SLS", "Kecamatan", "Koseka", "Pencacah (PCL)", "Pengawas (PML)", 
-        "Total Target", "OPEN", "DRAFT", "SUBMITTED BY Pencacah", 
+        "Total Target", "DRAFT", "SUBMITTED BY Pencacah", 
         "REJECTED BY Pengawas", "APPROVED BY Pengawas", "Progres", "Realisasi", "Realisasi (%)"
       ];
       const csvRows = [headers.join(",")];
@@ -681,7 +701,6 @@ export default function PetugasPage() {
           `"${item.pencacah.replace(/"/g, '""')}"`,
           `"${item.pengawas.replace(/"/g, '""')}"`,
           item.total,
-          item.open,
           item.draft,
           item.submit,
           item.reject,
@@ -706,7 +725,7 @@ export default function PetugasPage() {
 
     const headers = [
       "Nama Petugas", "Email", "Jabatan", "Kecamatan", "Koseka", 
-      "Total Target", "OPEN", "DRAFT", "SUBMITTED BY Pencacah", 
+      "Total Target", "DRAFT", "SUBMITTED BY Pencacah", 
       "REJECTED BY Pengawas", "APPROVED BY Pengawas", "Progres / Realisasi", "Realisasi (%)"
     ];
     const csvRows = [headers.join(",")];
@@ -720,7 +739,6 @@ export default function PetugasPage() {
         `"${formatKecName(o.namaKec).replace(/"/g, '""')}"`,
         `"${o.koseka.replace(/"/g, '""')}"`,
         o.total,
-        o.open,
         o.draft,
         o.submit,
         o.reject,
@@ -1095,8 +1113,14 @@ export default function PetugasPage() {
                           <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900">SLS</th>
                         </>
                       )}
+                      {(activeTab === "pcl" || activeTab === "pml") && (
+                        <>
+                          <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900 text-amber-600 dark:text-amber-400">KK</th>
+                          <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900 text-blue-600 dark:text-blue-400">Usaha</th>
+                          <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900 text-purple-600 dark:text-purple-400">Bangunan</th>
+                        </>
+                      )}
                       <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900">Target</th>
-                      <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900">Open</th>
                       <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900">Draft</th>
                       <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900">Submit</th>
                       <th className="py-4 px-4 text-center bg-slate-50 dark:bg-slate-900">Reject</th>
@@ -1147,7 +1171,6 @@ export default function PetugasPage() {
                                 <td className="py-3 px-4 font-normal">{k.pmlList.length} PML</td>
                                 <td className="py-3 px-4 text-center font-normal">{k.slsCount}</td>
                                 <td className="py-3 px-4 text-center font-semibold text-slate-800 dark:text-slate-200">{k.total}</td>
-                                <td className="py-3 px-4 text-center font-normal text-amber-500/90">{k.open}</td>
                                 <td className="py-3 px-4 text-center font-normal text-blue-500/90">{k.draft}</td>
                                 <td className="py-3 px-4 text-center font-normal text-teal-500/90">{k.submit}</td>
                                 <td className="py-3 px-4 text-center font-normal text-red-500/90">{k.reject}</td>
@@ -1186,7 +1209,6 @@ export default function PetugasPage() {
                                               <th className="pb-2 font-bold">Email</th>
                                               <th className="pb-2 text-center font-bold">SLS</th>
                                               <th className="pb-2 text-center font-bold">Target</th>
-                                              <th className="pb-2 text-center font-bold">Open</th>
                                               <th className="pb-2 text-center font-bold">Draft</th>
                                               <th className="pb-2 text-center font-bold">Submit</th>
                                               <th className="pb-2 text-center font-bold">Reject</th>
@@ -1213,7 +1235,6 @@ export default function PetugasPage() {
                                                   <td className="py-2 text-slate-400 font-normal">{pml.email}</td>
                                                   <td className="py-2 text-center">{pml.slsCount}</td>
                                                   <td className="py-2 text-center font-semibold text-slate-800 dark:text-slate-200">{pml.total}</td>
-                                                  <td className="py-2 text-center text-amber-500/90">{pml.open}</td>
                                                   <td className="py-2 text-center text-blue-500/90">{pml.draft}</td>
                                                   <td className="py-2 text-center text-teal-500/90">{pml.submit}</td>
                                                   <td className="py-2 text-center text-red-500/90">{pml.reject}</td>
@@ -1283,9 +1304,6 @@ export default function PetugasPage() {
                               <td className="py-3 px-4 text-center font-semibold text-slate-800 dark:text-slate-200">
                                 {item.total}
                               </td>
-                              <td className="py-3 px-4 text-center font-normal text-amber-500/90">
-                                {item.open}
-                              </td>
                               <td className="py-3 px-4 text-center font-normal text-blue-500/90">
                                 {item.draft}
                               </td>
@@ -1316,7 +1334,7 @@ export default function PetugasPage() {
                     ) : (
                       filteredOfficers.length === 0 ? (
                         <tr>
-                          <td colSpan={15} className="py-10 text-center text-slate-500 dark:text-slate-400 text-xs">
+                          <td colSpan={17} className="py-10 text-center text-slate-500 dark:text-slate-400 text-xs">
                             Tidak ada data petugas yang cocok dengan filter atau pencarian Anda.
                           </td>
                         </tr>
@@ -1354,8 +1372,14 @@ export default function PetugasPage() {
                                 <td className="py-3 px-4 font-normal">{formatKecName(o.namaKec)}</td>
                                 <td className="py-3 px-4 font-normal">{o.koseka}</td>
                                 <td className="py-3 px-4 text-center font-normal">{o.slsList.length}</td>
+                                {(activeTab === "pcl" || activeTab === "pml") && (
+                                  <>
+                                    <td className="py-3 px-4 text-center font-semibold text-amber-600 dark:text-amber-400">{(o.kkExcel || 0).toLocaleString("id-ID")}</td>
+                                    <td className="py-3 px-4 text-center font-semibold text-blue-600 dark:text-blue-400">{(o.usahaExcel || 0).toLocaleString("id-ID")}</td>
+                                    <td className="py-3 px-4 text-center font-semibold text-purple-600 dark:text-purple-400">{(o.bangunanExcel || 0).toLocaleString("id-ID")}</td>
+                                  </>
+                                )}
                                 <td className="py-3 px-4 text-center font-semibold text-slate-800 dark:text-slate-200">{o.total}</td>
-                                <td className="py-3 px-4 text-center font-normal text-amber-500/90">{o.open}</td>
                                 <td className="py-3 px-4 text-center font-normal text-blue-500/90">{o.draft}</td>
                                 <td className="py-3 px-4 text-center font-normal text-teal-500/90">{o.submit}</td>
                                 <td className="py-3 px-4 text-center font-normal text-red-500/90">{o.reject}</td>
@@ -1380,7 +1404,7 @@ export default function PetugasPage() {
                               {/* Expanded SLS Detail Row */}
                               {isExpanded && (
                                 <tr className="bg-slate-50/20 dark:bg-slate-950/20 border-b border-slate-200 dark:border-slate-800">
-                                  <td colSpan={15} className="py-4 px-8">
+                                  <td colSpan={17} className="py-4 px-8">
                                     <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 p-4 shadow-inner">
                                       <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
                                         <Layers className="w-3.5 h-3.5 text-orange-500" />
@@ -1421,10 +1445,7 @@ export default function PetugasPage() {
                                                   <span>Target:</span>
                                                   <span className="font-bold text-slate-800 dark:text-slate-300">{sls.total}</span>
                                                 </div>
-                                                <div className="flex justify-between text-amber-500">
-                                                  <span>Open:</span>
-                                                  <span className="font-bold">{sls.open}</span>
-                                                </div>
+
                                                 <div className="flex justify-between text-blue-500">
                                                   <span>Draft:</span>
                                                   <span className="font-bold">{sls.draft}</span>

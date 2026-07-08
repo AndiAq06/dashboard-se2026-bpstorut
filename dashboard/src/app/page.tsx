@@ -150,6 +150,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [kkTarget, setKkTarget] = useState<number>(0);
+  const [usahaTarget, setUsahaTarget] = useState<number>(0);
+  const [bangunanTarget, setBangunanTarget] = useState<number>(0);
 
   // Summary states from CSV files
   const [totalPrelistSummary, setTotalPrelistSummary] = useState<number>(0);
@@ -231,6 +234,21 @@ export default function DashboardPage() {
         }
       } catch (e) {
         console.warn("Gagal memuat ringkasan_Assign.csv, menggunakan data detail sebagai fallback:", e);
+      }
+
+      // Fetch and parse petugas_excel_targets.json
+      try {
+        const targetsRes = await fetch(`/petugas_excel_targets.json?t=${Date.now()}`);
+        if (targetsRes.ok) {
+          const targetsData = await targetsRes.json();
+          if (targetsData.totals) {
+            setKkTarget(targetsData.totals.kk || 0);
+            setUsahaTarget(targetsData.totals.usaha || 0);
+            setBangunanTarget(targetsData.totals.bangunan || 0);
+          }
+        }
+      } catch (e) {
+        console.warn("Gagal memuat petugas_excel_targets.json:", e);
       }
 
       // Fetch and parse ringkasan_Progres.csv
@@ -396,13 +414,16 @@ export default function DashboardPage() {
         openCount++;
       } else if (s === "draft") {
         draftCount++;
-      } else if (s === "submitted by pencacah" || s === "submit" || s === "submitted") {
+      } else if (s === "submitted by pencacah" || s === "submit" || s === "submitted" || s.includes("submit")) {
         submitCount++;
-      } else if (s === "rejected by pengawas" || s === "reject" || s === "rejected") {
+      } else if (s === "rejected by pengawas" || s === "reject" || s === "rejected" || s.includes("reject") || s.includes("revoked") || s.includes("edited")) {
         rejectCount++;
-      } else if (s === "approved by pengawas" || s === "approve" || s === "approved") {
+      } else if (s === "approved by pengawas" || s === "approve" || s === "approved" || s.includes("approve")) {
         approvedCount++;
       } else if (s === "kosong" || s === "") {
+        emptyCount++;
+      } else {
+        // Fallback for unclassified statuses
         emptyCount++;
       }
     });
@@ -425,14 +446,16 @@ export default function DashboardPage() {
     };
   }, [rawData]);
 
-  // Derived display stats that fall back to dynamic rawData-based stats
+  // Derived display stats: prioritize dynamic rawData-based stats when they are loaded (to show real-time changes),
+  // falling back to the quick summary counts only if the detailed data is empty.
   const { displayTotal, displayOpen, displaySubmit, displayApprove, displayDraft, displayReject, displayRealisasi, displayRealisasiFasih } = useMemo(() => {
-    const dTotal = totalPrelistSummary || stats.total;
-    const dOpen = summaryStatusCounts.open || stats.openCount;
-    const dSubmit = summaryStatusCounts.submit || stats.submitCount;
-    const dApprove = summaryStatusCounts.approve || stats.approvedCount;
-    const dDraft = summaryStatusCounts.draft || stats.draftCount;
-    const dReject = summaryStatusCounts.reject || stats.rejectCount;
+    const hasDetailedData = stats.total > 0;
+    const dTotal = hasDetailedData ? stats.total : totalPrelistSummary;
+    const dOpen = hasDetailedData ? stats.openCount : summaryStatusCounts.open;
+    const dSubmit = hasDetailedData ? stats.submitCount : summaryStatusCounts.submit;
+    const dApprove = hasDetailedData ? stats.approvedCount : summaryStatusCounts.approve;
+    const dDraft = hasDetailedData ? stats.draftCount : summaryStatusCounts.draft;
+    const dReject = hasDetailedData ? stats.rejectCount : summaryStatusCounts.reject;
 
     return {
       displayTotal: dTotal,
@@ -895,6 +918,60 @@ export default function DashboardPage() {
                 </span>
               </motion.div>
 
+              {/* Total Target KK Excel */}
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.05 }}
+                className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-orange-500/30 transition-all duration-300"
+              >
+                <div className="absolute right-0 top-0 translate-x-3 -translate-y-3 w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800/40 group-hover:bg-orange-500/5 transition-colors duration-300"></div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block uppercase tracking-wider">Total Target KK</span>
+                <span className="text-3xl font-extrabold mt-2 block text-amber-600 dark:text-amber-400">
+                  {kkTarget.toLocaleString("id-ID")}
+                </span>
+                <span className="text-xs text-slate-400 mt-2 block flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-amber-500" />
+                  Target KK dari berkas PPL
+                </span>
+              </motion.div>
+
+              {/* Total Target Usaha Excel */}
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.08 }}
+                className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-orange-500/30 transition-all duration-300"
+              >
+                <div className="absolute right-0 top-0 translate-x-3 -translate-y-3 w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800/40 group-hover:bg-orange-500/5 transition-colors duration-300"></div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block uppercase tracking-wider">Total Target Usaha</span>
+                <span className="text-3xl font-extrabold mt-2 block text-blue-600 dark:text-blue-400">
+                  {usahaTarget.toLocaleString("id-ID")}
+                </span>
+                <span className="text-xs text-slate-400 mt-2 block flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+                  Target usaha non-tani berkas PPL
+                </span>
+              </motion.div>
+
+              {/* Total Target Bangunan Excel */}
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.11 }}
+                className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-orange-500/30 transition-all duration-300"
+              >
+                <div className="absolute right-0 top-0 translate-x-3 -translate-y-3 w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800/40 group-hover:bg-orange-500/5 transition-colors duration-300"></div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block uppercase tracking-wider">Total Target Bangunan</span>
+                <span className="text-3xl font-extrabold mt-2 block text-purple-600 dark:text-purple-400">
+                  {bangunanTarget.toLocaleString("id-ID")}
+                </span>
+                <span className="text-xs text-slate-400 mt-2 block flex items-center gap-1">
+                  <Building className="w-3.5 h-3.5 text-purple-500" />
+                  Target bangunan bukan tempat tinggal
+                </span>
+              </motion.div>
+
               {/* Total Realisasi */}
               <motion.div
                 initial={{ opacity: 0, y: 15 }}
@@ -949,25 +1026,7 @@ export default function DashboardPage() {
                 </div>
               </motion.div>
 
-              {/* Status Terbuka (Open) */}
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.09 }}
-                className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-orange-500/30 transition-all duration-300"
-              >
-                <div className="absolute right-0 top-0 translate-x-3 -translate-y-3 w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800/40 group-hover:bg-orange-500/5 transition-colors duration-300"></div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block uppercase tracking-wider">Status Terbuka (Open)</span>
-                <span className="text-3xl font-extrabold mt-2 block text-amber-500">
-                  {displayOpen.toLocaleString("id-ID")}
-                </span>
-                <div className="flex items-center justify-between mt-3 gap-2">
-                  <div className="flex-1 bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div className="bg-amber-500 h-full rounded-full" style={{ width: `${displayTotal > 0 ? (displayOpen / displayTotal) * 100 : 0}%` }}></div>
-                  </div>
-                  <span className="text-xs sm:text-sm font-extrabold text-slate-700 dark:text-slate-200 whitespace-nowrap">{displayTotal > 0 ? ((displayOpen / displayTotal) * 100).toFixed(2) : "0.00"}%</span>
-                </div>
-              </motion.div>
+
 
               {/* Status Submitted by Pencacah */}
               <motion.div

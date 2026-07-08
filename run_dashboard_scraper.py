@@ -228,7 +228,11 @@ def main():
             "OPEN": "OPEN",
             "DRAFT": "DRAFT",
             "SUBMITTED BY PENCACAH": "SUBMITTED BY Pencacah",
+            "SUBMITTED RESPONDENT": "SUBMITTED BY Pencacah",
             "REJECTED BY PENGAWAS": "REJECTED BY Pengawas",
+            "REJECTED BY ADMIN KABUPATEN": "REJECTED BY Pengawas",
+            "REVOKED BY PENGAWAS": "REJECTED BY Pengawas",
+            "EDITED BY PENGAWAS": "REJECTED BY Pengawas",
             "APPROVED BY PENGAWAS": "APPROVED BY Pengawas",
         }
         

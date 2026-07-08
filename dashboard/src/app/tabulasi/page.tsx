@@ -442,9 +442,9 @@ export default function TabulasiPage() {
         // Process status checks
         const isOpen = status === "open" || status === "";
         const isDraft = status === "draft";
-        const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted";
-        const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas";
-        const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected";
+        const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted" || status.includes("submit");
+        const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas" || status.includes("approve");
+        const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected" || status.includes("reject") || status.includes("revoked") || status.includes("edited");
         const isRealisasi = isSubmit || isReject || isApprove;
 
         // Helper to add stats
@@ -526,9 +526,9 @@ export default function TabulasiPage() {
 
         const isOpen = status === "open" || status === "";
         const isDraft = status === "draft";
-        const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted";
-        const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas";
-        const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected";
+        const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted" || status.includes("submit");
+        const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas" || status.includes("approve");
+        const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected" || status.includes("reject") || status.includes("revoked") || status.includes("edited");
         const isRealisasi = isSubmit || isReject || isApprove;
 
         const addStats = (cell: CellStats) => {
@@ -580,9 +580,9 @@ export default function TabulasiPage() {
       const status = r.status.toLowerCase().trim();
       const isOpen = status === "open" || status === "";
       const isDraft = status === "draft";
-      const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted";
-      const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas";
-      const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected";
+      const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted" || status.includes("submit");
+      const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas" || status.includes("approve");
+      const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected" || status.includes("reject") || status.includes("revoked") || status.includes("edited");
       const isRealisasi = isSubmit || isReject || isApprove;
 
       totalStats.target++;
@@ -634,9 +634,9 @@ export default function TabulasiPage() {
 
       const isOpen = status === "open" || status === "";
       const isDraft = status === "draft";
-      const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted";
-      const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas";
-      const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected";
+      const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted" || status.includes("submit");
+      const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas" || status.includes("approve");
+      const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected" || status.includes("reject") || status.includes("revoked") || status.includes("edited");
       const isRealisasi = isSubmit || isReject || isApprove;
 
       const addStats = (cell: CellStats) => {
@@ -760,9 +760,9 @@ export default function TabulasiPage() {
 
         const isOpen = status === "open" || status === "";
         const isDraft = status === "draft";
-        const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted";
-        const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas";
-        const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected";
+        const isSubmit = status === "submitted by pencacah" || status === "submit" || status === "submitted" || status.includes("submit");
+        const isApprove = status === "approve" || status === "approved" || status === "approved by pengawas" || status.includes("approve");
+        const isReject = status === "rejected by pengawas" || status === "reject" || status === "rejected" || status.includes("reject") || status.includes("revoked") || status.includes("edited");
         const isRealisasi = isSubmit || isReject || isApprove;
 
         const addStats = (cell: CellStats) => {
@@ -819,7 +819,6 @@ export default function TabulasiPage() {
       headers.push(
         `[${cat}] Target`,
         `[${cat}] Realisasi`,
-        `[${cat}] Open`,
         `[${cat}] Submitted by Pencacah`,
         `[${cat}] Draft`,
         `[${cat}] Rejected by Pengawas`,
@@ -827,7 +826,7 @@ export default function TabulasiPage() {
       );
     });
 
-    headers.push("Total Target", "Total Realisasi", "Total Open", "Total Submitted by Pencacah", "Total Draft", "Total Rejected by Pengawas", "Total Approved by Pengawas");
+    headers.push("Total Target", "Total Realisasi", "Total Submitted by Pencacah", "Total Draft", "Total Rejected by Pengawas", "Total Approved by Pengawas");
 
     const csvRows = [headers.join(",")];
 
@@ -844,7 +843,6 @@ export default function TabulasiPage() {
           row.push(
             stats.target,
             stats.realisasi,
-            stats.open,
             stats.submit,
             stats.draft,
             stats.reject,
@@ -855,7 +853,6 @@ export default function TabulasiPage() {
         row.push(
           pcl.total.target,
           pcl.total.realisasi,
-          pcl.total.open,
           pcl.total.submit,
           pcl.total.draft,
           pcl.total.reject,
@@ -877,7 +874,6 @@ export default function TabulasiPage() {
           row.push(
             stats.target,
             stats.realisasi,
-            stats.open,
             stats.submit,
             stats.draft,
             stats.reject,
@@ -888,7 +884,6 @@ export default function TabulasiPage() {
         row.push(
           pml.total.target,
           pml.total.realisasi,
-          pml.total.open,
           pml.total.submit,
           pml.total.draft,
           pml.total.reject,
@@ -910,7 +905,6 @@ export default function TabulasiPage() {
           row.push(
             stats.target,
             stats.realisasi,
-            stats.open,
             stats.submit,
             stats.draft,
             stats.reject,
@@ -921,7 +915,6 @@ export default function TabulasiPage() {
         row.push(
           sls.total.target,
           sls.total.realisasi,
-          sls.total.open,
           sls.total.submit,
           sls.total.draft,
           sls.total.reject,
@@ -943,7 +936,6 @@ export default function TabulasiPage() {
           row.push(
             stats.target,
             stats.realisasi,
-            stats.open,
             stats.submit,
             stats.draft,
             stats.reject,
@@ -954,7 +946,6 @@ export default function TabulasiPage() {
         row.push(
           kec.total.target,
           kec.total.realisasi,
-          kec.total.open,
           kec.total.submit,
           kec.total.draft,
           kec.total.reject,
@@ -1008,23 +999,19 @@ export default function TabulasiPage() {
         </div>
         <div className="space-y-0.5 opacity-90 text-[10px] pl-1 font-semibold text-slate-500 dark:text-slate-400">
           <div className="flex justify-between">
-            <span>1. Open</span>
-            <span className="font-bold text-amber-500">{stats.open}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>2. Submitted by Pencacah</span>
+            <span>1. Submitted by Pencacah</span>
             <span className="font-bold text-teal-500">{stats.submit}</span>
           </div>
           <div className="flex justify-between">
-            <span>3. Draft</span>
+            <span>2. Draft</span>
             <span className="font-bold text-blue-500">{stats.draft}</span>
           </div>
           <div className="flex justify-between">
-            <span>4. Rejected by Pengawas</span>
+            <span>3. Rejected by Pengawas</span>
             <span className="font-bold text-red-500">{stats.reject}</span>
           </div>
           <div className="flex justify-between">
-            <span>5. Approved by Pengawas</span>
+            <span>4. Approved by Pengawas</span>
             <span className="font-bold text-emerald-500">{stats.approve}</span>
           </div>
         </div>

@@ -225,6 +225,134 @@ def load_excel_wilkerstat_kk_usaha():
         
     return excel_wilkerstat_map
 
+def load_excel_kk_usaha_bangunan_ppl():
+    excel_file = "Jumlah KK_Usaha_Bangunan.xlsx"
+    ppl_map = {}
+    if not os.path.exists(excel_file):
+        excel_file = os.path.join("data", "Jumlah KK_Usaha_Bangunan.xlsx")
+        
+    if os.path.exists(excel_file):
+        try:
+            import pandas as pd
+            # Header is at row index 3 (0-indexed)
+            df = pd.read_excel(excel_file, header=3)
+            ppl_col = next((c for c in df.columns if 'nama ppl' in str(c).lower()), None)
+            kk_col = next((c for c in df.columns if 'jumlah kk' in str(c).lower()), None)
+            usaha_col = next((c for c in df.columns if 'jumlah usaha' in str(c).lower()), None)
+            bangunan_col = next((c for c in df.columns if 'jumlah bangunan' in str(c).lower()), None)
+            
+            for _, row in df.iterrows():
+                ppl_val = row.get(ppl_col) if ppl_col else None
+                if pd.notna(ppl_val):
+                    ppl_name = str(ppl_val).strip()
+                    norm_name = normalize_name(ppl_name)
+                    if not norm_name:
+                        continue
+                    
+                    # Ignore summary/total rows
+                    if "progres toraja utara" in norm_name or "total" in norm_name:
+                        continue
+                    
+                    kk_val = 0
+                    if kk_col and pd.notna(row.get(kk_col)):
+                        try:
+                            kk_val = int(row[kk_col])
+                        except Exception:
+                            pass
+                            
+                    usaha_val = 0
+                    if usaha_col and pd.notna(row.get(usaha_col)):
+                        try:
+                            usaha_val = int(row[usaha_col])
+                        except Exception:
+                            pass
+                            
+                    bangunan_val = 0
+                    if bangunan_col and pd.notna(row.get(bangunan_col)):
+                        try:
+                            bangunan_val = int(row[bangunan_col])
+                        except Exception:
+                            pass
+                    
+                    if norm_name not in ppl_map:
+                        ppl_map[norm_name] = {'kk': 0, 'usaha': 0, 'bangunan': 0}
+                    ppl_map[norm_name]['kk'] += kk_val
+                    ppl_map[norm_name]['usaha'] += usaha_val
+                    ppl_map[norm_name]['bangunan'] += bangunan_val
+            print(f"Loaded {len(ppl_map)} PPL target entries from Excel '{excel_file}'.")
+        except Exception as e:
+            print(f"Warning: Failed to parse '{excel_file}': {e}")
+    else:
+        print(f"Warning: Excel file '{excel_file}' not found.")
+        
+    return ppl_map
+
+def generate_and_save_petugas_excel_targets(wilkerstat_map, ppl_name_to_email, pml_name_to_email):
+    excel_ppl_map = load_excel_kk_usaha_bangunan_ppl()
+    
+    # 1. Map PML to their assigned PPLs
+    pml_to_ppls = {}
+    for sls_16, details in wilkerstat_map.items():
+        ppl = normalize_name(details['ppl_name'])
+        pml = normalize_name(details['pml_name'])
+        if ppl and pml:
+            if pml not in pml_to_ppls:
+                pml_to_ppls[pml] = set()
+            pml_to_ppls[pml].add(ppl)
+            
+    # 2. Compute grand totals of PPL targets
+    total_kk = sum(data['kk'] for data in excel_ppl_map.values())
+    total_usaha = sum(data['usaha'] for data in excel_ppl_map.values())
+    total_bangunan = sum(data['bangunan'] for data in excel_ppl_map.values())
+    
+    # 3. Compute PML targets by summing PPL targets under them
+    pml_targets = {}
+    for pml, ppls in pml_to_ppls.items():
+        pml_targets[pml] = {
+            'kk': sum(excel_ppl_map.get(ppl, {}).get('kk', 0) for ppl in ppls),
+            'usaha': sum(excel_ppl_map.get(ppl, {}).get('usaha', 0) for ppl in ppls),
+            'bangunan': sum(excel_ppl_map.get(ppl, {}).get('bangunan', 0) for ppl in ppls)
+        }
+        
+    # 4. Construct JSON payload
+    payload = {
+        'totals': {
+            'kk': total_kk,
+            'usaha': total_usaha,
+            'bangunan': total_bangunan
+        },
+        'targets': {}
+    }
+    
+    # Add PPLs by name and email
+    for norm_name, vals in excel_ppl_map.items():
+        payload['targets'][norm_name] = vals
+        email = ppl_name_to_email.get(norm_name)
+        if email:
+            payload['targets'][email] = vals
+            
+    # Add PMLs by name and email
+    for norm_name, vals in pml_targets.items():
+        payload['targets'][norm_name] = vals
+        email = pml_name_to_email.get(norm_name)
+        if email:
+            payload['targets'][email] = vals
+            
+    # 5. Write to root & copy to public
+    json_filename = "petugas_excel_targets.json"
+    try:
+        with open(json_filename, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        print(f"Successfully generated and wrote '{json_filename}' to root.")
+        
+        # Copy to dashboard public
+        public_dir = os.path.join("dashboard", "public")
+        if os.path.exists(public_dir):
+            shutil.copy2(json_filename, os.path.join(public_dir, json_filename))
+            print(f"Copied '{json_filename}' to dashboard public folder.")
+    except Exception as e:
+        print(f"Error saving targets JSON: {e}")
+
 def normalize_name(name):
     if not name:
         return ""
@@ -349,6 +477,9 @@ def process_dashboard_scraped_data(priority_sls=None):
     if not wilkerstat_map:
         print("Error: Wilkerstat capacity map is empty. Cannot map dashboard data.")
         return False
+
+    # Generate and save excel targets mapping for KK, Usaha, and Bangunan
+    generate_and_save_petugas_excel_targets(wilkerstat_map, ppl_name_to_email, pml_name_to_email)
 
     # 4. Read the raw scraped progress counts from existing dashboard_scraped_data.csv
     print(f"Loading raw scraped counts from '{scraped_file}'...")
@@ -936,11 +1067,22 @@ def generate_local_dashboard():
     # Get timestamp
     timestamp = get_wita_timestamp()
     
+    # Load petugas_excel_targets.json
+    excel_targets_data = {}
+    json_path = "petugas_excel_targets.json"
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as jf:
+                excel_targets_data = json.load(jf)
+        except Exception as e:
+            print(f"Warning loading excel targets JSON: {e}")
+
     # 4. Generate HTML content
     template = get_dashboard_html_template()
     html_content = template.replace("__SCRAPED_DATA_JSON__", json.dumps(scraped_data))
     html_content = html_content.replace("__ASSIGN_DATA_JSON__", json.dumps(assign_data))
     html_content = html_content.replace("__PROGRES_DATA_JSON__", json.dumps(progres_data))
+    html_content = html_content.replace("__PETUGAS_EXCEL_TARGETS_JSON__", json.dumps(excel_targets_data))
     html_content = html_content.replace("__TIMESTAMP__", timestamp)
     
     try:
@@ -1590,11 +1732,41 @@ def get_dashboard_html_template():
 
             <div class="kpi-card">
                 <div>
-                    <div class="kpi-title">Total Muatan Wilkerstat</div>
+                    <div class="kpi-title">Total Target Wilkerstat</div>
                     <div class="kpi-value" id="kpiTotalWilkerstat">0</div>
                 </div>
                 <div class="kpi-indicator" style="color: var(--text-muted)">
                     Muatan Wilkerstat Keseluruhan
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-title">Total Target KK</div>
+                    <div class="kpi-value" id="kpiTotalKKExcel" style="color: #ea580c;">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Total Target KK dari Excel PPL
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-title">Total Target Usaha</div>
+                    <div class="kpi-value" id="kpiTotalUsahaExcel" style="color: #2563eb;">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Total Target Usaha dari Excel PPL
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-title">Total Target Bangunan</div>
+                    <div class="kpi-value" id="kpiTotalBangunanExcel" style="color: #7c3aed;">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Total Target Bangunan dari Excel PPL
                 </div>
             </div>
 
@@ -1632,15 +1804,7 @@ def get_dashboard_html_template():
                 </div>
             </div>
 
-            <div class="kpi-card">
-                <div>
-                    <div class="kpi-title">OPEN</div>
-                    <div class="kpi-value txt-open" id="kpiOpen">0</div>
-                </div>
-                <div class="kpi-indicator indicator-open">
-                    <span class="kpi-dot bg-open"></span> Belum Disentuh
-                </div>
-            </div>
+
 
             <div class="kpi-card">
                 <div>
@@ -1737,6 +1901,7 @@ def get_dashboard_html_template():
         const rawScrapedData = __SCRAPED_DATA_JSON__;
         const assignData = __ASSIGN_DATA_JSON__;
         const progresData = __PROGRES_DATA_JSON__;
+        const PETUGAS_EXCEL_TARGETS = __PETUGAS_EXCEL_TARGETS_JSON__;
     </script>
 
     <!-- Main Logic JS -->
@@ -1769,7 +1934,7 @@ def get_dashboard_html_template():
         const numericFields = [
             'total_sls', 'muatan', 'OPEN', 'DRAFT', 'SUBMITTED', 'REJECTED', 'APPROVED', 'progress_rate',
             'muatan_wilkerstat', 'SUBMITTED BY Pencacah', 'REJECTED BY Pengawas', 'APPROVED BY Pengawas',
-            'kk_wilkerstat', 'usaha_wilkerstat'
+            'kk_wilkerstat', 'usaha_wilkerstat', 'kk_excel', 'usaha_excel', 'bangunan_excel'
         ];
         
         // Pagination state for Detail SLS
@@ -1888,23 +2053,36 @@ def get_dashboard_html_template():
                 totalAppUsaha += val.approve_usaha;
             });
             
-            // Get values from official progresData if available, otherwise fallback to sums
-            const valApproved = (typeof progresData !== 'undefined' && progresData && 'APPROVED BY Pengawas' in progresData) ? parseInt(progresData['APPROVED BY Pengawas']) : totalApproved;
-            const valSubmitted = (typeof progresData !== 'undefined' && progresData && 'SUBMITTED BY Pencacah' in progresData) ? parseInt(progresData['SUBMITTED BY Pencacah']) : totalSubmitted;
-            const valDraft = (typeof progresData !== 'undefined' && progresData && 'DRAFT' in progresData) ? parseInt(progresData['DRAFT']) : totalDraft;
-            const valOpen = (typeof progresData !== 'undefined' && progresData && 'OPEN' in progresData) ? parseInt(progresData['OPEN']) : totalOpen;
-            const valRejected = (typeof progresData !== 'undefined' && progresData && 'REJECTED BY Pengawas' in progresData) ? parseInt(progresData['REJECTED BY Pengawas']) : totalRejected;
+            // Prioritize dynamic detailed scraped sums when available, falling back to official progresData only if empty
+            const hasDetailedData = uniqueSlsMap.size > 0 && totalMuatan > 0;
+            const valApproved = hasDetailedData ? totalApproved : ((typeof progresData !== 'undefined' && progresData && 'APPROVED BY Pengawas' in progresData) ? parseInt(progresData['APPROVED BY Pengawas']) : totalApproved);
+            const valSubmitted = hasDetailedData ? totalSubmitted : ((typeof progresData !== 'undefined' && progresData && 'SUBMITTED BY Pencacah' in progresData) ? parseInt(progresData['SUBMITTED BY Pencacah']) : totalSubmitted);
+            const valDraft = hasDetailedData ? totalDraft : ((typeof progresData !== 'undefined' && progresData && 'DRAFT' in progresData) ? parseInt(progresData['DRAFT']) : totalDraft);
+            const valOpen = hasDetailedData ? totalOpen : ((typeof progresData !== 'undefined' && progresData && 'OPEN' in progresData) ? parseInt(progresData['OPEN']) : totalOpen);
+            const valRejected = hasDetailedData ? totalRejected : ((typeof progresData !== 'undefined' && progresData && 'REJECTED BY Pengawas' in progresData) ? parseInt(progresData['REJECTED BY Pengawas']) : totalRejected);
             
             // Update fields
             document.getElementById('kpiTotalSLS').textContent = uniqueSlsMap.size.toLocaleString('id-ID');
             const scrapedTargetMuatan = (typeof assignData !== 'undefined' && assignData && assignData.assigned) ? parseInt(assignData.assigned) : totalMuatan;
             document.getElementById('kpiTotalMuatan').textContent = scrapedTargetMuatan.toLocaleString('id-ID');
             document.getElementById('kpiTotalWilkerstat').textContent = totalMuatan.toLocaleString('id-ID');
-            document.getElementById('kpiOpen').textContent = valOpen.toLocaleString('id-ID');
             document.getElementById('kpiDraft').textContent = valDraft.toLocaleString('id-ID');
             document.getElementById('kpiSubmitted').textContent = valSubmitted.toLocaleString('id-ID');
             document.getElementById('kpiRejected').textContent = valRejected.toLocaleString('id-ID');
             document.getElementById('kpiApproved').textContent = valApproved.toLocaleString('id-ID');
+
+            // Update Excel totals cards
+            if (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.totals) {
+                if (document.getElementById('kpiTotalKKExcel')) {
+                    document.getElementById('kpiTotalKKExcel').textContent = (PETUGAS_EXCEL_TARGETS.totals.kk || 0).toLocaleString('id-ID');
+                }
+                if (document.getElementById('kpiTotalUsahaExcel')) {
+                    document.getElementById('kpiTotalUsahaExcel').textContent = (PETUGAS_EXCEL_TARGETS.totals.usaha || 0).toLocaleString('id-ID');
+                }
+                if (document.getElementById('kpiTotalBangunanExcel')) {
+                    document.getElementById('kpiTotalBangunanExcel').textContent = (PETUGAS_EXCEL_TARGETS.totals.bangunan || 0).toLocaleString('id-ID');
+                }
+            }
             
             // Update approved breakdown
             if (document.getElementById('kpiApprovedKeluarga')) {
@@ -2095,7 +2273,6 @@ def get_dashboard_html_template():
                                     <th onclick="handleKecSort('nama_kec')">Kecamatan ${getSortArrow('nama_kec', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('total_sls')">Jumlah SLS ${getSortArrow('total_sls', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('muatan')">Muatan Wilkerstat ${getSortArrow('muatan', sortKecField, sortKecAsc)}</th>
-                                    <th onclick="handleKecSort('OPEN')">Open ${getSortArrow('OPEN', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('DRAFT')">Draft ${getSortArrow('DRAFT', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('SUBMITTED')">Submitted ${getSortArrow('SUBMITTED', sortKecField, sortKecAsc)}</th>
                                     <th onclick="handleKecSort('REJECTED')">Rejected ${getSortArrow('REJECTED', sortKecField, sortKecAsc)}</th>
@@ -2113,7 +2290,6 @@ def get_dashboard_html_template():
                         <td style="font-weight: 600; color: var(--primary)">${kec.nama_kec}</td>
                         <td style="font-weight: 500;">${kec.total_sls.toLocaleString('id-ID')}</td>
                         <td style="font-weight: 500; color: #475569;">${kec.muatan.toLocaleString('id-ID')}</td>
-                        <td class="txt-open">${kec.OPEN.toLocaleString('id-ID')}</td>
                         <td class="txt-draft">${kec.DRAFT.toLocaleString('id-ID')}</td>
                         <td class="txt-submitted">${kec.SUBMITTED.toLocaleString('id-ID')}</td>
                         <td class="txt-rejected">${kec.REJECTED.toLocaleString('id-ID')}</td>
@@ -2150,7 +2326,6 @@ def get_dashboard_html_template():
             renderActiveTab();
         }
 
-        // Tab 2: Rekap Petugas
         function renderPetugasTab(tabDiv, filteredData) {
             const petMap = {};
             filteredData.forEach(row => {
@@ -2159,6 +2334,11 @@ def get_dashboard_html_template():
                 
                 let key = email;
                 if (!petMap[key]) {
+                    const normName = (row.nama_petugas || '').split(",")[0].toLowerCase().trim().replace(/\./g, "").replace(/'/g, "").replace(/`/g, "");
+                    const targets = (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.targets) 
+                        ? (PETUGAS_EXCEL_TARGETS.targets[email] || PETUGAS_EXCEL_TARGETS.targets[normName] || { kk: 0, usaha: 0, bangunan: 0 })
+                        : { kk: 0, usaha: 0, bangunan: 0 };
+
                     petMap[key] = {
                         email: email,
                         nama_petugas: row.nama_petugas || row.Email || 'Belum Ditentukan',
@@ -2169,7 +2349,10 @@ def get_dashboard_html_template():
                         DRAFT: 0,
                         SUBMITTED: 0,
                         REJECTED: 0,
-                        APPROVED: 0
+                        APPROVED: 0,
+                        kk_excel: targets.kk || 0,
+                        usaha_excel: targets.usaha || 0,
+                        bangunan_excel: targets.bangunan || 0
                     };
                 }
                 
@@ -2217,7 +2400,9 @@ def get_dashboard_html_template():
                                     <th onclick="handlePetSort('jabatan_petugas')">Peran ${getSortArrow('jabatan_petugas', sortPetField, sortPetAsc)}</th>
                                     <th onclick="handlePetSort('total_sls')">Total SLS ${getSortArrow('total_sls', sortPetField, sortPetAsc)}</th>
                                     <th onclick="handlePetSort('muatan')">Muatan Wilkerstat ${getSortArrow('muatan', sortPetField, sortPetAsc)}</th>
-                                    <th onclick="handlePetSort('OPEN')">Open ${getSortArrow('OPEN', sortPetField, sortPetAsc)}</th>
+                                    <th onclick="handlePetSort('kk_excel')">KK ${getSortArrow('kk_excel', sortPetField, sortPetAsc)}</th>
+                                    <th onclick="handlePetSort('usaha_excel')">Usaha ${getSortArrow('usaha_excel', sortPetField, sortPetAsc)}</th>
+                                    <th onclick="handlePetSort('bangunan_excel')">Bangunan ${getSortArrow('bangunan_excel', sortPetField, sortPetAsc)}</th>
                                     <th onclick="handlePetSort('DRAFT')">Draft ${getSortArrow('DRAFT', sortPetField, sortPetAsc)}</th>
                                     <th onclick="handlePetSort('SUBMITTED')">Submitted ${getSortArrow('SUBMITTED', sortPetField, sortPetAsc)}</th>
                                     <th onclick="handlePetSort('REJECTED')">Rejected ${getSortArrow('REJECTED', sortPetField, sortPetAsc)}</th>
@@ -2237,7 +2422,9 @@ def get_dashboard_html_template():
                         <td><span class="badge badge-role">${pet.jabatan_petugas}</span></td>
                         <td style="font-weight: 500;">${pet.total_sls.toLocaleString('id-ID')}</td>
                         <td style="font-weight: 500; color: #475569;">${pet.muatan.toLocaleString('id-ID')}</td>
-                        <td class="txt-open">${pet.OPEN.toLocaleString('id-ID')}</td>
+                        <td style="font-weight: 600; color: #d97706;">${(pet.kk_excel || 0).toLocaleString('id-ID')}</td>
+                        <td style="font-weight: 600; color: #2563eb;">${(pet.usaha_excel || 0).toLocaleString('id-ID')}</td>
+                        <td style="font-weight: 600; color: #7c3aed;">${(pet.bangunan_excel || 0).toLocaleString('id-ID')}</td>
                         <td class="txt-draft">${pet.DRAFT.toLocaleString('id-ID')}</td>
                         <td class="txt-submitted">${pet.SUBMITTED.toLocaleString('id-ID')}</td>
                         <td class="txt-rejected">${pet.REJECTED.toLocaleString('id-ID')}</td>
@@ -2344,7 +2531,6 @@ def get_dashboard_html_template():
                                     <th onclick="handleDetSort('kk_wilkerstat')">KK Wilkerstat ${getSortArrow('kk_wilkerstat', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('usaha_wilkerstat')">Usaha Wilkerstat ${getSortArrow('usaha_wilkerstat', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('muatan_wilkerstat')">Muatan ${getSortArrow('muatan_wilkerstat', sortDetField, sortDetAsc)}</th>
-                                    <th onclick="handleDetSort('OPEN')">Open ${getSortArrow('OPEN', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('DRAFT')">Draft ${getSortArrow('DRAFT', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('SUBMITTED BY Pencacah')">Submitted ${getSortArrow('SUBMITTED BY Pencacah', sortDetField, sortDetAsc)}</th>
                                     <th onclick="handleDetSort('REJECTED BY Pengawas')">Rejected ${getSortArrow('REJECTED BY Pengawas', sortDetField, sortDetAsc)}</th>
@@ -2381,7 +2567,6 @@ def get_dashboard_html_template():
                         <td>${row.kk_wilkerstat || 0}</td>
                         <td>${row.usaha_wilkerstat || 0}</td>
                         <td>${row.muatan_wilkerstat}</td>
-                        <td class="txt-open">${row.OPEN}</td>
                         <td class="txt-draft">${row.DRAFT}</td>
                         <td class="txt-submitted">${row["SUBMITTED BY Pencacah"]}</td>
                         <td class="txt-rejected">${row["REJECTED BY Pengawas"]}</td>
