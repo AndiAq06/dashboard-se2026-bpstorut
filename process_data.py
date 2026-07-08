@@ -236,7 +236,7 @@ def clean_kec_name_for_matching(name):
             n = parts[1].strip()
     # Normalize spaces, casing, and common separators
     n = n.lower().strip()
-    n = n.replace(" ", "").replace("-", "").replace("_", "")
+    n = n.replace(" ", "").replace("-", "").replace("_", "").replace("'", "").replace("`", "").replace(".", "")
     return n
 
 def load_excel_kk_usaha_bangunan_ppl():
