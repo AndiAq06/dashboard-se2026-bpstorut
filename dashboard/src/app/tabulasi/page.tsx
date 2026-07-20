@@ -31,6 +31,7 @@ interface ScraperRecord {
   name: string;
   address: string;
   scale: string;
+  jumlahUsaha: number;
   status: string;
   officer: string;
   nama_kec: string;
@@ -80,8 +81,10 @@ interface SLSStats {
   isPrioritas: boolean;
   categories: { [category: string]: CellStats };
   total: CellStats;
-  approveKeluarga: number;
+  approveTinggal: number;
   approveUsaha: number;
+  approveCampuran: number;
+  approveLainnya: number;
   kkWilkerstat: number;
   usahaWilkerstat: number;
 }
@@ -247,6 +250,7 @@ export default function TabulasiPage() {
               name: row[2].replace(/"/g, "").trim(),
               address: row[3].replace(/"/g, "").trim(),
               scale: normalizeScale(row[7].replace(/"/g, "").trim()),
+              jumlahUsaha: row[8] ? parseInt(row[8].replace(/"/g, "").trim()) || 0 : 0,
               status: row[12].replace(/"/g, "").trim(),
               officer: row[14].replace(/"/g, "").trim(),
               nama_kec: row[16] ? row[16].replace(/"/g, "").trim() : "",
@@ -619,8 +623,10 @@ export default function TabulasiPage() {
           isPrioritas: r.isPrioritas === "Ya",
           categories: {},
           total: createEmptyCellStats(),
-          approveKeluarga: 0,
+          approveTinggal: 0,
           approveUsaha: 0,
+          approveCampuran: 0,
+          approveLainnya: 0,
           kkWilkerstat: r.kkWilkerstat || 0,
           usahaWilkerstat: r.usahaWilkerstat || 0
         };
@@ -654,10 +660,20 @@ export default function TabulasiPage() {
       }
       addStats(statsMap[slsCode].total);
 
-      // Add to counts if status is approve
-      if (isApprove) {
-        if (cat === "Keluarga") {
-          statsMap[slsCode].approveKeluarga++;
+      // Add to counts if status is realisasi using classification rules
+      if (isRealisasi) {
+        const nameLower = r.name.toLowerCase();
+        const scaleLower = r.scale.toLowerCase();
+        const jmlUsaha = r.jumlahUsaha || 0;
+        
+        if (nameLower.includes("lumbung") || nameLower.includes("kandang") || nameLower.includes("kerbau") || nameLower.includes("tongkonan")) {
+          statsMap[slsCode].approveLainnya++;
+        } else if (scaleLower.includes("keluarga")) {
+          if (jmlUsaha === 0) {
+            statsMap[slsCode].approveTinggal++;
+          } else {
+            statsMap[slsCode].approveCampuran++;
+          }
         } else {
           statsMap[slsCode].approveUsaha++;
         }
@@ -683,8 +699,10 @@ export default function TabulasiPage() {
   const selectedSlsOverviewStats = useMemo(() => {
     const totalStats = {
       ...createEmptyCellStats(),
-      approveKeluarga: 0,
-      approveUsaha: 0
+      approveTinggal: 0,
+      approveUsaha: 0,
+      approveCampuran: 0,
+      approveLainnya: 0
     };
 
     filteredSlsStats.forEach(sls => {
@@ -696,8 +714,10 @@ export default function TabulasiPage() {
       totalStats.submit += t.submit;
       totalStats.approve += t.approve;
       totalStats.reject += t.reject;
-      totalStats.approveKeluarga += sls.approveKeluarga;
+      totalStats.approveTinggal += sls.approveTinggal;
       totalStats.approveUsaha += sls.approveUsaha;
+      totalStats.approveCampuran += sls.approveCampuran;
+      totalStats.approveLainnya += sls.approveLainnya;
     });
 
     const completionRate = totalStats.target > 0 ? (totalStats.realisasi / totalStats.target) * 100 : 0;
@@ -1338,11 +1358,17 @@ export default function TabulasiPage() {
                   <div className="bg-slate-50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-100 dark:border-slate-900/50">
                     <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Total Approved</span>
                     <div className="flex flex-col gap-0.5 mt-1">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Keluarga: <span className="font-extrabold text-emerald-500">{selectedSlsOverviewStats.approveKeluarga.toLocaleString("id-ID")}</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        T. Tinggal: <span className="font-extrabold text-emerald-500">{selectedSlsOverviewStats.approveTinggal.toLocaleString("id-ID")}</span>
                       </span>
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Usaha: <span className="font-extrabold text-blue-500">{selectedSlsOverviewStats.approveUsaha.toLocaleString("id-ID")}</span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        T. Usaha: <span className="font-extrabold text-blue-500">{selectedSlsOverviewStats.approveUsaha.toLocaleString("id-ID")}</span>
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        Campuran: <span className="font-extrabold text-amber-600">{selectedSlsOverviewStats.approveCampuran.toLocaleString("id-ID")}</span>
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        Lainnya: <span className="font-extrabold text-slate-500">{selectedSlsOverviewStats.approveLainnya.toLocaleString("id-ID")}</span>
                       </span>
                     </div>
                   </div>
@@ -1566,10 +1592,16 @@ export default function TabulasiPage() {
                                 <div className="text-[10px] text-slate-400 font-normal mt-0.5">{sls.kec} • Koseka: {sls.koseka}</div>
                                 <div className="mt-1.5 flex flex-wrap gap-1.5 text-[9px] font-bold">
                                   <span className="inline-flex px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-900/30">
-                                    Keluarga Approved: {sls.approveKeluarga}
+                                    T. Tinggal Approved: {sls.approveTinggal}
                                   </span>
                                   <span className="inline-flex px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-200/50 dark:border-blue-900/30">
-                                    Usaha Approved: {sls.approveUsaha}
+                                    T. Usaha Approved: {sls.approveUsaha}
+                                  </span>
+                                  <span className="inline-flex px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-900/30">
+                                    Campuran Approved: {sls.approveCampuran}
+                                  </span>
+                                  <span className="inline-flex px-1.5 py-0.5 rounded-md bg-slate-50 dark:bg-slate-900/30 text-slate-500 dark:text-slate-400 border border-slate-200/50 dark:border-slate-800">
+                                    Lainnya Approved: {sls.approveLainnya}
                                   </span>
                                 </div>
                                 <div className="mt-1 flex flex-wrap gap-1.5 text-[9px] font-bold">

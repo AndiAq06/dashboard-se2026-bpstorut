@@ -414,16 +414,15 @@ def run_scraper(use_test_emails=False):
         period_id = match.group(2)
         print(f"Parsed Survey ID: {survey_id}, Period ID: {period_id}")
 
-        js_fetch_script = """
+        js_fetch_bulk_script = """
             async (params) => {
-                const { email, periodId } = params;
+                const { emails, periodId } = params;
                 const xsrfToken = document.cookie.split('; ').find(row => row.startsWith('XSRF-TOKEN='))?.split('=')[1] || '';
                 
                 let allRecords = [];
-                let start = 0;
-                const length = 100;
+                const fetchedIds = new Set();
                 
-                while (true) {
+                const postAPI = async (start, length, searchValue) => {
                     const payload = {
                         "start": start,
                         "length": length,
@@ -443,7 +442,7 @@ def run_scraper(use_test_emails=False):
                         ],
                         "order": [],
                         "search": {
-                            "value": email,
+                            "value": searchValue,
                             "regex": false
                         },
                         "assignmentExtraParam": {
@@ -466,170 +465,182 @@ def run_scraper(use_test_emails=False):
                         throw new Error('HTTP error ' + response.status);
                     }
                     
-                    const result = await response.json();
-                    const dataList = result.searchData || [];
-                    allRecords.push(...dataList);
-                    
-                    const totalHit = result.totalHit || 0;
-                    if (allRecords.length >= totalHit || dataList.length === 0) {
-                        break;
+                    return await response.json();
+                };
+                
+                // We fetch email-by-email in parallel (concurrency 12)
+                // This is 100% safe from server-side query caps!
+                console.log("Fetching details email-by-email in parallel...");
+                const fetchForEmail = async (email) => {
+                    let start = 0;
+                    const length = 250;
+                    while (true) {
+                        const result = await postAPI(start, length, email);
+                        const dataList = result.searchData || [];
+                        for (const item of dataList) {
+                            const itemId = item.id;
+                            if (!fetchedIds.has(itemId)) {
+                                fetchedIds.add(itemId);
+                                allRecords.push(item);
+                            }
+                        }
+                        const total = result.totalHit || 0;
+                        const currentFetched = dataList.length;
+                        if (currentFetched === 0 || start + currentFetched >= total) {
+                            break;
+                        }
+                        start += length;
                     }
-                    
-                    start += length;
+                };
+                
+                const concurrencyLimit = 12;
+                const queue = [...emails];
+                const activePromises = [];
+                
+                while (queue.length > 0 || activePromises.length > 0) {
+                    while (activePromises.length < concurrencyLimit && queue.length > 0) {
+                        const email = queue.shift();
+                        const p = fetchForEmail(email).then(() => {
+                            activePromises.splice(activePromises.indexOf(p), 1);
+                        }).catch((err) => {
+                            console.error("Error fetching for email " + email + ":", err);
+                            activePromises.splice(activePromises.indexOf(p), 1);
+                        });
+                        activePromises.push(p);
+                    }
+                    if (activePromises.length > 0) {
+                        await Promise.race(activePromises);
+                    }
                 }
+                
+                // Also fetch by status to get any records not mapped to emails
+                console.log("Fetching additional records by status...");
+                const statuses = ["approved by pengawas", "submitted by pencacah", "rejected by pengawas"];
+                const fetchByStatus = async (statusName) => {
+                    let start = 0;
+                    const length = 250;
+                    while (true) {
+                        const result = await postAPI(start, length, statusName);
+                        const dataList = result.searchData || [];
+                        for (const item of dataList) {
+                            const itemId = item.id;
+                            if (!fetchedIds.has(itemId)) {
+                                fetchedIds.add(itemId);
+                                allRecords.push(item);
+                            } else {
+                                const existing = allRecords.find(r => r.id === itemId);
+                                if (existing) {
+                                    existing.assignmentStatusAlias = statusName;
+                                }
+                            }
+                        }
+                        const total = result.totalHit || 0;
+                        const currentFetched = dataList.length;
+                        if (currentFetched === 0 || start + currentFetched >= total) {
+                            break;
+                        }
+                        start += length;
+                    }
+                };
+                
+                await Promise.all(statuses.map(s => fetchByStatus(s).catch(e => console.error("Error status " + s, e))));
                 
                 return allRecords;
             }
         """
 
-        # Start search looping
-        failed_emails = []
-        for index in range(resume_index, len(emails)):
-            email = emails[index]
-            print(f"[{index + 1}/{len(emails)}] Fetching detail via API for: {email}")
+        # Load SLS code to PPL email mapping for resolving Searched Email column
+        print("Loading SLS code to PPL email mappings...")
+        sls_to_email = {}
+        try:
+            ppl_file = "email_ppl.csv"
+            if not os.path.exists(ppl_file):
+                ppl_file = os.path.join("data", "email_ppl.csv")
             
-            # Small safety delay between requests
-            if index > resume_index:
-                delay_seconds = random.uniform(0.5, 1.2)
-                time.sleep(delay_seconds)
+            ppl_name_to_email = {}
+            if os.path.exists(ppl_file):
+                with open(ppl_file, mode='r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        name = row.get('Nama PPL', '').strip()
+                        email = row.get('email', '').strip().lower()
+                        if email:
+                            ppl_name_to_email[process_data.normalize_name(name)] = email
             
-            attempts = 3
-            success = False
-            
-            for attempt in range(1, attempts + 1):
-                if attempt > 1:
-                    print(f"  [Retry] Melakukan percobaan ulang ke-{attempt} untuk {email}...")
-                try:
-                    records = page.evaluate(js_fetch_script, {"email": email, "periodId": period_id})
-                    
-                    total_scraped = 0
-                    for item in records:
-                        code_identity = item.get("codeIdentity") or "-"
-                        data1 = item.get("data1") or "-"
-                        data2 = item.get("data2") or "-"
-                        data3 = item.get("data3") or "-"
-                        data4 = item.get("data4") or "-"
-                        data5 = item.get("data5") or "-"
-                        data6 = item.get("data6") or "-"
-                        data7 = item.get("data7") or "-"
-                        data8 = item.get("data8") or "-"
-                        data9 = item.get("data9") or "-"
-                        data10 = item.get("data10") or "-"
-                        status = (item.get("assignmentStatusAlias") or "open").lower()
-                        
-                        modes = item.get("mode") or []
-                        mode = ", ".join(modes) if modes else "-"
-                        
-                        username = item.get("currentUserUsername") or ""
-                        role_name = item.get("currentUserSurveyRoleName") or ""
-                        petugas = f"{username}{role_name}" if username or role_name else "-"
-                        
-                        keterangan = "-"
-                        
-                        csv_writer.writerow([
-                            email, code_identity, data1, data2, data3, data4, data5, data6, data7, data8, data9, data10, status, mode, petugas, keterangan
-                        ])
-                        total_scraped += 1
-                        
-                    csv_file.flush()
-                    print(f"  Finished search for {email}. Total scraped: {total_scraped} rows.")
-                    success = True
-                    break
-                except Exception as e:
-                    print(f"  Error processing email {email} (Percobaan {attempt}/{attempts}): {e}")
-                    if attempt < attempts:
-                        print(f"  Mencoba kembali karena terjadi error...")
-                        try:
-                            page.goto(current_url)
-                            page.wait_for_selector("table", timeout=45000)
-                        except Exception:
-                            pass
-                        time.sleep(attempt * 2)
-                    else:
-                        print(f"  Gagal memproses email {email} setelah {attempts} percobaan. Akan dicoba lagi di akhir.")
-                        failed_emails.append(email)
-            
-            # Save checkpoint
-            try:
-                with open(checkpoint_file, "w") as f:
-                    json.dump({"last_index": index, "last_email": email, "reverse_order": reverse_order}, f)
-            except Exception as cp_err:
-                print(f"Warning: Could not save checkpoint: {cp_err}")
+            pml_ppl_file = os.path.join("data", "pml_ppl.csv")
+            if os.path.exists(pml_ppl_file):
+                with open(pml_ppl_file, mode='r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        name = row.get('nama_petugas', '').strip()
+                        email = row.get('email', '').strip().lower()
+                        role = row.get('jabatan_petugas', '').strip().upper()
+                        if email and name and role == "PPL":
+                            ppl_name_to_email[process_data.normalize_name(name)] = email
 
-        # Retry failed emails at the end until all are successfully retrieved
-        if failed_emails:
-            print(f"\n--- Phase 3b: Retrying {len(failed_emails)} failed emails at the end ---")
-            retry_round = 1
-            while failed_emails:
-                print(f"\nRetry Round #{retry_round} for {len(failed_emails)} remaining emails...")
-                still_failed = []
-                for idx, email in enumerate(failed_emails):
-                    print(f"[{idx + 1}/{len(failed_emails)}] Retrying: {email}")
-                    
-                    # Small delay between retry requests
-                    delay_seconds = random.uniform(1.0, 2.0)
-                    time.sleep(delay_seconds)
-                    
-                    success = False
-                    attempts = 3
-                    for attempt in range(1, attempts + 1):
-                        if attempt > 1:
-                            print(f"  [Retry] Retry attempt #{attempt} for {email}...")
-                        try:
-                            records = page.evaluate(js_fetch_script, {"email": email, "periodId": period_id})
-                            
-                            total_scraped = 0
-                            for item in records:
-                                code_identity = item.get("codeIdentity") or "-"
-                                data1 = item.get("data1") or "-"
-                                data2 = item.get("data2") or "-"
-                                data3 = item.get("data3") or "-"
-                                data4 = item.get("data4") or "-"
-                                data5 = item.get("data5") or "-"
-                                data6 = item.get("data6") or "-"
-                                data7 = item.get("data7") or "-"
-                                data8 = item.get("data8") or "-"
-                                data9 = item.get("data9") or "-"
-                                data10 = item.get("data10") or "-"
-                                status = (item.get("assignmentStatusAlias") or "open").lower()
-                                
-                                modes = item.get("mode") or []
-                                mode = ", ".join(modes) if modes else "-"
-                                
-                                username = item.get("currentUserUsername") or ""
-                                role_name = item.get("currentUserSurveyRoleName") or ""
-                                petugas = f"{username}{role_name}" if username or role_name else "-"
-                                
-                                keterangan = "-"
-                                
-                                csv_writer.writerow([
-                                    email, code_identity, data1, data2, data3, data4, data5, data6, data7, data8, data9, data10, status, mode, petugas, keterangan
-                                ])
-                                total_scraped += 1
-                                
-                            csv_file.flush()
-                            print(f"  Finished search for {email}. Total scraped: {total_scraped} rows.")
-                            success = True
-                            break
-                        except Exception as e:
-                            print(f"  Error retrying email {email} (Attempt {attempt}/{attempts}): {e}")
-                            # Reload page
-                            try:
-                                page.goto(current_url)
-                                page.wait_for_selector("table", timeout=45000)
-                            except Exception:
-                                pass
-                            time.sleep(attempt * 2)
-                    
-                    if not success:
-                        still_failed.append(email)
+            wilkerstat_map = process_data.load_muatan_wilkerstat()
+            for sls_16, details in wilkerstat_map.items():
+                ppl_name = details['ppl_name']
+                ppl_email = ppl_name_to_email.get(process_data.normalize_name(ppl_name), "")
+                if ppl_email:
+                    sls_to_email[sls_16] = ppl_email
+            print(f"Successfully loaded {len(sls_to_email)} SLS-to-email mapping entries.")
+        except Exception as mapping_err:
+            print(f"Warning: Failed to load SLS to email mapping: {mapping_err}")
+
+        # Fetch detail data in bulk
+        print("\nFetching ALL details in bulk via API...")
+        try:
+            records = page.evaluate(js_fetch_bulk_script, {"emails": emails, "periodId": period_id})
+            print(f"Successfully fetched a total of {len(records)} records.")
+            
+            total_scraped = 0
+            for item in records:
+                code_identity = item.get("codeIdentity") or "-"
+                data1 = item.get("data1") or "-"
+                data2 = item.get("data2") or "-"
+                data3 = item.get("data3") or "-"
+                data4 = item.get("data4") or "-"
+                data5 = item.get("data5") or "-"
+                data6 = item.get("data6") or "-"
+                data7 = item.get("data7") or "-"
+                data8 = item.get("data8") or "-"
+                data9 = item.get("data9") or "-"
+                data10 = item.get("data10") or "-"
+                status = (item.get("assignmentStatusAlias") or "open").lower()
                 
-                failed_emails = still_failed
-                retry_round += 1
-                if failed_emails:
-                    print(f"Round finished. {len(failed_emails)} emails still failed. Waiting 5 seconds before next round...")
-                    time.sleep(5)
-            print("All failed emails processed successfully!")
+                modes = item.get("mode") or []
+                mode = ", ".join(modes) if modes else "-"
+                
+                username = item.get("currentUserUsername") or ""
+                role_name = item.get("currentUserSurveyRoleName") or ""
+                petugas = f"{username}{role_name}" if username or role_name else "-"
+                
+                keterangan = "-"
+                
+                # Resolve searched email
+                digits_only = "".join([c for c in code_identity if c.isdigit()])
+                sls_16 = digits_only[:16]
+                
+                email_col = ""
+                if sls_16 in sls_to_email:
+                    email_col = sls_to_email[sls_16]
+                else:
+                    if "@" in username:
+                        email_col = username.strip().lower()
+                    else:
+                        email_col = "tidak_teridentifikasi@gmail.com"
+                        
+                csv_writer.writerow([
+                    email_col, code_identity, data1, data2, data3, data4, data5, data6, data7, data8, data9, data10, status, mode, petugas, keterangan
+                ])
+                total_scraped += 1
+                
+            csv_file.flush()
+            print(f"Finished bulk writing. Total records processed: {total_scraped}")
+        except Exception as e:
+            print(f"ERROR: Failed to run bulk API scraper: {e}")
+            sys.exit(1)
                     
 
                 

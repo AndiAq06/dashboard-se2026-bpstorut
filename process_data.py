@@ -557,7 +557,7 @@ def process_dashboard_scraped_data(priority_sls=None):
     except Exception as e:
         print(f"Warning loading existing scraped counts: {e}")
 
-    # 4b. Parse update_data.csv to calculate approved Keluarga and approved Usaha counts per SLS
+    # 4b. Parse update_data.csv to calculate approved counts for 4 categories per SLS
     sls_approve_map = {}
     update_data_file = "update_data.csv"
     if os.path.exists(update_data_file):
@@ -568,27 +568,49 @@ def process_dashboard_scraped_data(priority_sls=None):
                 id_idx = headers.index("Kode Identitas") if "Kode Identitas" in headers else 1
                 status_idx = headers.index("Status") if "Status" in headers else 12
                 scale_idx = headers.index("Skala Usaha / Jenis Prelist") if "Skala Usaha / Jenis Prelist" in headers else 7
+                name_idx = headers.index("Nama Keluarga/Bangunan/Usaha") if "Nama Keluarga/Bangunan/Usaha" in headers else 2
+                jml_usaha_idx = headers.index("Jumlah Usaha") if "Jumlah Usaha" in headers else 8
                 
                 for row in reader:
                     if len(row) > max(id_idx, status_idx, scale_idx):
                         id_code = row[id_idx].strip()
                         status = row[status_idx].strip().lower()
                         scale = row[scale_idx].strip()
+                        name_val = row[name_idx].strip() if len(row) > name_idx else ""
+                        jml_usaha_val = row[jml_usaha_idx].strip() if len(row) > jml_usaha_idx else ""
                         
                         digits_only = "".join([c for c in id_code if c.isdigit()])
                         sls_16 = digits_only[:16]
                         
                         if sls_16:
                             if sls_16 not in sls_approve_map:
-                                sls_approve_map[sls_16] = {'keluarga': 0, 'usaha': 0}
+                                sls_approve_map[sls_16] = {'tinggal': 0, 'usaha': 0, 'campuran': 0, 'lainnya': 0}
                             
-                            is_approve = status in ["approved by pengawas", "approved", "approve"]
-                            if is_approve:
-                                if scale == "Keluarga":
-                                    sls_approve_map[sls_16]['keluarga'] += 1
+                            is_realisasi = status in [
+                                "approved by pengawas", "approved", "approve",
+                                "submitted by pencacah", "submit", "submitted",
+                                "rejected by pengawas", "reject", "rejected"
+                            ]
+                            if is_realisasi:
+                                name_lower = name_val.lower()
+                                scale_lower = scale.lower()
+                                
+                                try:
+                                    jml_usaha = int(jml_usaha_val) if jml_usaha_val and str(jml_usaha_val).strip().isdigit() else 0
+                                except ValueError:
+                                    jml_usaha = 0
+                                
+                                # 4-category classification rules
+                                if any(x in name_lower for x in ["lumbung", "kandang", "kerbau", "tongkonan"]):
+                                    sls_approve_map[sls_16]['lainnya'] += 1
+                                elif "keluarga" in scale_lower:
+                                    if jml_usaha == 0:
+                                        sls_approve_map[sls_16]['tinggal'] += 1
+                                    else:
+                                        sls_approve_map[sls_16]['campuran'] += 1
                                 else:
                                     sls_approve_map[sls_16]['usaha'] += 1
-            print(f"Computed approved Keluarga/Usaha counts for {len(sls_approve_map)} SLS codes from '{update_data_file}'.")
+            print(f"Computed approved 4-category counts for {len(sls_approve_map)} SLS codes from '{update_data_file}'.")
         except Exception as e:
             print(f"Warning: Failed to parse '{update_data_file}' for SLS approved counts: {e}")
 
@@ -599,12 +621,12 @@ def process_dashboard_scraped_data(priority_sls=None):
     print("Aligning and building aligned dashboard rows...")
     aligned_rows = []
     
-    # We output exactly the 18 headers:
+    # We output exactly the 20 headers:
     output_headers = [
         "Category", "Email", "SLS Code", 
         "OPEN", "DRAFT", "SUBMITTED BY Pencacah", "REJECTED BY Pengawas", "APPROVED BY Pengawas",
         "nama_petugas", "jabatan_petugas", "nama_kec", "koseka", "is_prioritas", "muatan_wilkerstat",
-        "approve_keluarga", "approve_usaha", "kk_wilkerstat", "usaha_wilkerstat"
+        "approve_tinggal", "approve_usaha", "approve_campuran", "approve_lainnya", "kk_wilkerstat", "usaha_wilkerstat"
     ]
     
     for sls_16, details in wilkerstat_map.items():
@@ -654,9 +676,11 @@ def process_dashboard_scraped_data(priority_sls=None):
         else:
             ppl_counts = pml_counts
             
-        sls_ap = sls_approve_map.get(sls_16, {'keluarga': 0, 'usaha': 0})
-        app_kel = sls_ap['keluarga']
+        sls_ap = sls_approve_map.get(sls_16, {'tinggal': 0, 'usaha': 0, 'campuran': 0, 'lainnya': 0})
+        app_tinggal = sls_ap['tinggal']
         app_us = sls_ap['usaha']
+        app_camp = sls_ap['campuran']
+        app_lain = sls_ap['lainnya']
         
         excel_ap = excel_map.get(sls_16, {'jumlah_kk': 0, 'jumlah_usaha': 0})
         kk_wilk = excel_ap['jumlah_kk']
@@ -667,7 +691,7 @@ def process_dashboard_scraped_data(priority_sls=None):
             str(ppl_counts["OPEN"]), str(ppl_counts["DRAFT"]), str(ppl_counts["SUBMITTED BY Pencacah"]),
             str(ppl_counts["REJECTED BY Pengawas"]), str(ppl_counts["APPROVED BY Pengawas"]),
             ppl_name, "PPL", nama_kec, koseka, is_prioritas, str(muatan),
-            str(app_kel), str(app_us), str(kk_wilk), str(us_wilk)
+            str(app_tinggal), str(app_us), str(app_camp), str(app_lain), str(kk_wilk), str(us_wilk)
         ]
         aligned_rows.append(ppl_row)
         
@@ -676,7 +700,7 @@ def process_dashboard_scraped_data(priority_sls=None):
             str(pml_counts["OPEN"]), str(pml_counts["DRAFT"]), str(pml_counts["SUBMITTED BY Pencacah"]),
             str(pml_counts["REJECTED BY Pengawas"]), str(pml_counts["APPROVED BY Pengawas"]),
             pml_name, "PML", nama_kec, koseka, is_prioritas, str(muatan),
-            str(app_kel), str(app_us), str(kk_wilk), str(us_wilk)
+            str(app_tinggal), str(app_us), str(app_camp), str(app_lain), str(kk_wilk), str(us_wilk)
         ]
         aligned_rows.append(pml_row)
         
@@ -952,7 +976,7 @@ def generate_local_dashboard():
                 reader = csv.DictReader(f)
                 for row in reader:
                     # Clean and parse numeric values
-                    for col in ["OPEN", "DRAFT", "SUBMITTED BY Pencacah", "REJECTED BY Pengawas", "APPROVED BY Pengawas", "muatan_wilkerstat", "approve_keluarga", "approve_usaha", "kk_wilkerstat", "usaha_wilkerstat"]:
+                    for col in ["OPEN", "DRAFT", "SUBMITTED BY Pencacah", "REJECTED BY Pengawas", "APPROVED BY Pengawas", "muatan_wilkerstat", "approve_tinggal", "approve_usaha", "approve_campuran", "approve_lainnya", "kk_wilkerstat", "usaha_wilkerstat"]:
                         if col in row:
                             try:
                                 row[col] = int(row[col])
@@ -1028,8 +1052,10 @@ def generate_local_dashboard():
                 "koseka": "",
                 "is_prioritas": "Tidak",
                 "muatan_wilkerstat": 0,
-                "approve_keluarga": 0,
+                "approve_tinggal": 0,
                 "approve_usaha": 0,
+                "approve_campuran": 0,
+                "approve_lainnya": 0,
                 "kk_wilkerstat": 0,
                 "usaha_wilkerstat": 0
             }
@@ -1801,12 +1827,48 @@ def get_dashboard_html_template():
 
             <div class="kpi-card">
                 <div>
+                    <div class="kpi-title">REALISASI T. TINGGAL</div>
+                    <div class="kpi-value" id="kpiRealTinggal">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Tempat Tinggal (App + Sub + Rej)
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-title">REALISASI T. USAHA</div>
+                    <div class="kpi-value" id="kpiRealUsaha">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Tempat Usaha (App + Sub + Rej)
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-title">REALISASI CAMPURAN</div>
+                    <div class="kpi-value" id="kpiRealCampuran">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Bangunan Campuran (App + Sub + Rej)
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
+                    <div class="kpi-title">REALISASI LAINNYA</div>
+                    <div class="kpi-value" id="kpiRealLainnya">0</div>
+                </div>
+                <div class="kpi-indicator" style="color: var(--text-muted)">
+                    Lainnya/Bukan T. Tinggal (App + Sub + Rej)
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div>
                     <div class="kpi-title">APPROVED PML</div>
                     <div class="kpi-value txt-approved" id="kpiApproved">0</div>
-                    <div style="font-size: 0.75rem; margin-top: 4px; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px;">
-                        <span>Keluarga: <strong id="kpiApprovedKeluarga" style="color: #059669;">0</strong></span>
-                        <span>Usaha: <strong id="kpiApprovedUsaha" style="color: #0284c7;">0</strong></span>
-                    </div>
                 </div>
                 <div class="kpi-indicator indicator-approved">
                     <span class="kpi-dot bg-approved"></span> Bersih / Selesai
@@ -2068,8 +2130,10 @@ def get_dashboard_html_template():
                             REJECTED: parseInt(row["REJECTED BY Pengawas"]) || 0,
                             APPROVED: parseInt(row["APPROVED BY Pengawas"]) || 0,
                             muatan: parseInt(row.muatan_wilkerstat) || 0,
-                            approve_keluarga: parseInt(row.approve_keluarga) || 0,
-                            approve_usaha: parseInt(row.approve_usaha) || 0
+                            approve_tinggal: parseInt(row.approve_tinggal) || 0,
+                            approve_usaha: parseInt(row.approve_usaha) || 0,
+                            approve_campuran: parseInt(row.approve_campuran) || 0,
+                            approve_lainnya: parseInt(row.approve_lainnya) || 0
                         });
                     }
                 }
@@ -2081,8 +2145,10 @@ def get_dashboard_html_template():
             let totalRejected = 0;
             let totalApproved = 0;
             let totalMuatan = 0;
-            let totalAppKeluarga = 0;
+            let totalAppTinggal = 0;
             let totalAppUsaha = 0;
+            let totalAppCampuran = 0;
+            let totalAppLainnya = 0;
             
             uniqueSlsMap.forEach(val => {
                 totalOpen += val.OPEN;
@@ -2091,8 +2157,10 @@ def get_dashboard_html_template():
                 totalRejected += val.REJECTED;
                 totalApproved += val.APPROVED;
                 totalMuatan += val.muatan;
-                totalAppKeluarga += val.approve_keluarga;
+                totalAppTinggal += val.approve_tinggal;
                 totalAppUsaha += val.approve_usaha;
+                totalAppCampuran += val.approve_campuran;
+                totalAppLainnya += val.approve_lainnya;
             });
             
             // Prioritize dynamic detailed scraped sums when available, falling back to official progresData only if empty
@@ -2112,6 +2180,18 @@ def get_dashboard_html_template():
             document.getElementById('kpiSubmitted').textContent = valSubmitted.toLocaleString('id-ID');
             document.getElementById('kpiRejected').textContent = valRejected.toLocaleString('id-ID');
             document.getElementById('kpiApproved').textContent = valApproved.toLocaleString('id-ID');
+            if (document.getElementById('kpiRealTinggal')) {
+                document.getElementById('kpiRealTinggal').textContent = totalAppTinggal.toLocaleString('id-ID');
+            }
+            if (document.getElementById('kpiRealUsaha')) {
+                document.getElementById('kpiRealUsaha').textContent = totalAppUsaha.toLocaleString('id-ID');
+            }
+            if (document.getElementById('kpiRealCampuran')) {
+                document.getElementById('kpiRealCampuran').textContent = totalAppCampuran.toLocaleString('id-ID');
+            }
+            if (document.getElementById('kpiRealLainnya')) {
+                document.getElementById('kpiRealLainnya').textContent = totalAppLainnya.toLocaleString('id-ID');
+            }
 
             // Update Excel totals cards
             if (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.totals) {
@@ -2127,11 +2207,17 @@ def get_dashboard_html_template():
             }
             
             // Update approved breakdown
-            if (document.getElementById('kpiApprovedKeluarga')) {
-                document.getElementById('kpiApprovedKeluarga').textContent = totalAppKeluarga.toLocaleString('id-ID');
+            if (document.getElementById('kpiApprovedTinggal')) {
+                document.getElementById('kpiApprovedTinggal').textContent = totalAppTinggal.toLocaleString('id-ID');
             }
             if (document.getElementById('kpiApprovedUsaha')) {
                 document.getElementById('kpiApprovedUsaha').textContent = totalAppUsaha.toLocaleString('id-ID');
+            }
+            if (document.getElementById('kpiApprovedCampuran')) {
+                document.getElementById('kpiApprovedCampuran').textContent = totalAppCampuran.toLocaleString('id-ID');
+            }
+            if (document.getElementById('kpiApprovedLainnya')) {
+                document.getElementById('kpiApprovedLainnya').textContent = totalAppLainnya.toLocaleString('id-ID');
             }
             
             // Progress Calculation
@@ -2608,10 +2694,16 @@ def get_dashboard_html_template():
                             <div>${row["SLS Code"] || '-'}</div>
                             <div style="margin-top: 4px; display: flex; gap: 4px; font-size: 9px; font-weight: bold; flex-wrap: wrap;">
                                 <span style="background-color: #ecfdf5; color: #059669; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(5,150,105,0.1); white-space: nowrap;">
-                                    Keluarga Approved: ${row.approve_keluarga || 0}
+                                    T. Tinggal Approved: ${row.approve_tinggal || 0}
                                 </span>
                                 <span style="background-color: #f0f9ff; color: #0284c7; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(2,132,199,0.1); white-space: nowrap;">
-                                    Usaha Approved: ${row.approve_usaha || 0}
+                                    T. Usaha Approved: ${row.approve_usaha || 0}
+                                </span>
+                                <span style="background-color: #fff7ed; color: #ea580c; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(234,88,12,0.1); white-space: nowrap;">
+                                    Campuran Approved: ${row.approve_campuran || 0}
+                                </span>
+                                <span style="background-color: #f8fafc; color: #64748b; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(100,116,139,0.1); white-space: nowrap;">
+                                    Lainnya Approved: ${row.approve_lainnya || 0}
                                 </span>
                             </div>
                         </td>
