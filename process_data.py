@@ -2914,9 +2914,9 @@ def get_dashboard_html_template():
                     const name = row.nama_petugas || '';
                     if (!email) return;
                     if (!petMap[email]) {
-                        const normName = cleanPetugasNameForMatching(name);
-                        const targets = (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.petugas_targets)
-                            ? (PETUGAS_EXCEL_TARGETS.petugas_targets[normName] || { kk: 0, usaha: 0, bangunan: 0 })
+                        const normName = (name || '').split(",")[0].toLowerCase().trim().replace(/\./g, "").replace(/'/g, "").replace(/`/g, "");
+                        const targets = (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.targets)
+                            ? (PETUGAS_EXCEL_TARGETS.targets[email] || PETUGAS_EXCEL_TARGETS.targets[normName] || { kk: 0, usaha: 0, bangunan: 0 })
                             : { kk: 0, usaha: 0, bangunan: 0 };
                         petMap[email] = {
                             nama_petugas: name, email: email, jabatan_petugas: getNormalizedRole(row),
