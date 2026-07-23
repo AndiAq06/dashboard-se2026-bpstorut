@@ -397,7 +397,7 @@ def run_unified_scraper():
             page.wait_for_timeout(2000)
             
         search_input = page.locator(search_selector).first
-        search_input.wait_for(state="visible", timeout=30000)
+        search_input.wait_for(state="visible", timeout=60000)
         search_input.click()
         page.keyboard.press("Control+A")
         page.keyboard.press("Backspace")
@@ -410,7 +410,7 @@ def run_unified_scraper():
         # Click the row with exact text "SENSUS EKONOMI 2026"
         print("Finding exact match for 'SENSUS EKONOMI 2026'...")
         survey_items = page.locator("text=SENSUS EKONOMI 2026")
-        survey_items.first.wait_for(state="visible", timeout=30000)
+        survey_items.first.wait_for(state="visible", timeout=60000)
         
         survey_item = None
         count = survey_items.count()
@@ -448,7 +448,9 @@ def run_unified_scraper():
         if run_mode in ["full", "dashboard"]:
             # 4. Scrape Dashboard Rekap Data
             print("\n--- Phase 1: Downloading Ringkasan CSVs ---")
-            page.locator("button:has-text('Ringkasan')").first.click()
+            ringkasan_btn = page.locator("button:has-text('Ringkasan')").first
+            ringkasan_btn.wait_for(state="visible", timeout=60000)
+            ringkasan_btn.click()
             page.wait_for_timeout(1500)
             
             csv_buttons = page.locator("button:has(svg.tabler-icon-csv)")
@@ -621,7 +623,7 @@ def run_unified_scraper():
                                 # Match status case-insensitively
                                 matched_col = status_mapping.get(raw_status.upper())
                                 if matched_col:
-                                    scraped_data_dict[key][matched_col] = int(count)
+                                    scraped_data_dict[key][matched_col] += int(count)
                 except Exception as eval_err:
                     print(f"  Error fetching rekap for {category}: {eval_err}")
      

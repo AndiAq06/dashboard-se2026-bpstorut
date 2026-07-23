@@ -2195,10 +2195,24 @@ def get_dashboard_html_template():
             // Prioritize dynamic detailed scraped sums when available, falling back to official progresData only if empty
             const hasDetailedData = uniqueSlsMap.size > 0 && totalMuatan > 0;
             const valApproved = hasDetailedData ? totalApproved : ((typeof progresData !== 'undefined' && progresData && 'APPROVED BY Pengawas' in progresData) ? parseInt(progresData['APPROVED BY Pengawas']) : totalApproved);
-            const valSubmitted = hasDetailedData ? totalSubmitted : ((typeof progresData !== 'undefined' && progresData && 'SUBMITTED BY Pencacah' in progresData) ? parseInt(progresData['SUBMITTED BY Pencacah']) : totalSubmitted);
+            
+            let fallbackSubmitted = totalSubmitted;
+            if (typeof progresData !== 'undefined' && progresData) {
+                fallbackSubmitted = (parseInt(progresData['SUBMITTED BY Pencacah']) || 0) + (parseInt(progresData['SUBMITTED RESPONDENT']) || 0);
+            }
+            const valSubmitted = hasDetailedData ? totalSubmitted : fallbackSubmitted;
+            
             const valDraft = hasDetailedData ? totalDraft : ((typeof progresData !== 'undefined' && progresData && 'DRAFT' in progresData) ? parseInt(progresData['DRAFT']) : totalDraft);
             const valOpen = hasDetailedData ? totalOpen : ((typeof progresData !== 'undefined' && progresData && 'OPEN' in progresData) ? parseInt(progresData['OPEN']) : totalOpen);
-            const valRejected = hasDetailedData ? totalRejected : ((typeof progresData !== 'undefined' && progresData && 'REJECTED BY Pengawas' in progresData) ? parseInt(progresData['REJECTED BY Pengawas']) : totalRejected);
+            
+            let fallbackRejected = totalRejected;
+            if (typeof progresData !== 'undefined' && progresData) {
+                fallbackRejected = (parseInt(progresData['REJECTED BY Pengawas']) || 0) + 
+                                   (parseInt(progresData['REVOKED BY Pengawas']) || 0) + 
+                                   (parseInt(progresData['REJECTED BY Admin Kabupaten']) || 0) + 
+                                   (parseInt(progresData['EDITED BY Pengawas']) || 0);
+            }
+            const valRejected = hasDetailedData ? totalRejected : fallbackRejected;
             
             // Update fields
             document.getElementById('kpiTotalSLS').textContent = uniqueSlsMap.size.toLocaleString('id-ID');
