@@ -993,6 +993,167 @@ export default function TabulasiPage() {
     document.body.removeChild(link);
   };
 
+  const handleExportXLSX = () => {
+    import("xlsx").then((XLSX) => {
+      let headers = ["Nama / Kode SLS", "Kecamatan", "Jabatan / Koseka"];
+      
+      categories.forEach(cat => {
+        headers.push(
+          `[${cat}] Target`,
+          `[${cat}] Realisasi`,
+          `[${cat}] Submitted by Pencacah`,
+          `[${cat}] Draft`,
+          `[${cat}] Rejected by Pengawas`,
+          `[${cat}] Approved by Pengawas`
+        );
+      });
+
+      headers.push("Total Target", "Total Realisasi", "Total Submitted by Pencacah", "Total Draft", "Total Rejected by Pengawas", "Total Approved by Pengawas");
+
+      const rows: (string | number)[][] = [];
+
+      if (activeTab === "pcl") {
+        filteredPclStats.forEach(pcl => {
+          const row: (string | number)[] = [
+            pcl.nama,
+            pcl.kec,
+            pcl.jabatan
+          ];
+
+          categories.forEach(cat => {
+            const stats = pcl.categories[cat];
+            row.push(
+              stats.target,
+              stats.realisasi,
+              stats.submit,
+              stats.draft,
+              stats.reject,
+              stats.approve
+            );
+          });
+
+          row.push(
+            pcl.total.target,
+            pcl.total.realisasi,
+            pcl.total.submit,
+            pcl.total.draft,
+            pcl.total.reject,
+            pcl.total.approve
+          );
+
+          rows.push(row);
+        });
+      } else if (activeTab === "pml") {
+        filteredPmlStats.forEach(pml => {
+          const row: (string | number)[] = [
+            pml.nama,
+            pml.kec,
+            pml.jabatan
+          ];
+
+          categories.forEach(cat => {
+            const stats = pml.categories[cat];
+            row.push(
+              stats.target,
+              stats.realisasi,
+              stats.submit,
+              stats.draft,
+              stats.reject,
+              stats.approve
+            );
+          });
+
+          row.push(
+            pml.total.target,
+            pml.total.realisasi,
+            pml.total.submit,
+            pml.total.draft,
+            pml.total.reject,
+            pml.total.approve
+          );
+
+          rows.push(row);
+        });
+      } else if (activeTab === "sls") {
+        filteredSlsStats.forEach(sls => {
+          const row: (string | number)[] = [
+            sls.slsCode,
+            sls.kec,
+            sls.koseka
+          ];
+
+          categories.forEach(cat => {
+            const stats = sls.categories[cat];
+            row.push(
+              stats.target,
+              stats.realisasi,
+              stats.submit,
+              stats.draft,
+              stats.reject,
+              stats.approve
+            );
+          });
+
+          row.push(
+            sls.total.target,
+            sls.total.realisasi,
+            sls.total.submit,
+            sls.total.draft,
+            sls.total.reject,
+            sls.total.approve
+          );
+
+          rows.push(row);
+        });
+      } else {
+        kecamatanStats.forEach(kec => {
+          const row: (string | number)[] = [
+            kec.kecName,
+            "-",
+            kec.koseka
+          ];
+
+          categories.forEach(cat => {
+            const stats = kec.categories[cat];
+            row.push(
+              stats.target,
+              stats.realisasi,
+              stats.submit,
+              stats.draft,
+              stats.reject,
+              stats.approve
+            );
+          });
+
+          row.push(
+            kec.total.target,
+            kec.total.realisasi,
+            kec.total.submit,
+            kec.total.draft,
+            kec.total.reject,
+            kec.total.approve
+          );
+
+          rows.push(row);
+        });
+      }
+
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, `Tabulasi ${activeTab.toUpperCase()}`);
+      
+      const filename = activeTab === "pcl" 
+        ? `tabulasi_pcl_monitoring_se2026_${Date.now()}.xlsx`
+        : activeTab === "pml"
+          ? `tabulasi_pml_monitoring_se2026_${Date.now()}.xlsx`
+          : activeTab === "sls"
+            ? `tabulasi_sls_monitoring_se2026_${Date.now()}.xlsx`
+            : `tabulasi_kecamatan_monitoring_se2026_${Date.now()}.xlsx`;
+
+      XLSX.writeFile(workbook, filename);
+    });
+  };
+
   // Render sub-cell content
   const CellContent = ({ stats, highlight }: { stats: CellStats; highlight?: boolean }) => {
     if (stats.target === 0) {
@@ -1276,13 +1437,20 @@ export default function TabulasiPage() {
                 </div>
 
                 {/* Right: Export button */}
-                <div className="w-full md:w-auto flex justify-end">
+                <div className="w-full md:w-auto flex justify-end gap-2">
                   <button
                     onClick={handleExportCSV}
                     className="w-full sm:w-auto py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-1.5 text-xs font-bold bg-white dark:bg-slate-950 cursor-pointer shadow-sm"
                   >
                     <Download className="w-4 h-4 text-orange-500" />
                     <span>Ekspor CSV</span>
+                  </button>
+                  <button
+                    onClick={handleExportXLSX}
+                    className="w-full sm:w-auto py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-1.5 text-xs font-bold bg-white dark:bg-slate-950 cursor-pointer shadow-sm"
+                  >
+                    <Download className="w-4 h-4 text-green-600" />
+                    <span>Ekspor Excel (XLSX)</span>
                   </button>
                 </div>
 

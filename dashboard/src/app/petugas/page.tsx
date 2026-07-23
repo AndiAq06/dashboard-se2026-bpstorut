@@ -769,6 +769,99 @@ export default function PetugasPage() {
     document.body.removeChild(link);
   };
 
+  const handleExportXLSX = () => {
+    import("xlsx").then((XLSX) => {
+      let headers: string[] = [];
+      let rows: (string | number)[][] = [];
+      let sheetName = "";
+      let filename = "";
+
+      if (activeTab === "kecamatan") {
+        headers = [
+          "Kecamatan", "Jumlah PML", "Jumlah SLS", 
+          "Total Target", "DRAFT", "SUBMITTED BY Pencacah", 
+          "REJECTED BY Pengawas", "APPROVED BY Pengawas", "Total Realisasi", "Realisasi (%)"
+        ];
+        sheetName = "Kecamatan";
+        filename = `monitoring_kecamatan_${Date.now()}.xlsx`;
+
+        kecamatanStats.forEach(k => {
+          const pct = k.total > 0 ? ((k.realisasi / k.total) * 100).toFixed(2) : "0.00";
+          rows.push([
+            formatKecName(k.namaKec),
+            k.pmlList.length,
+            k.slsCount,
+            k.total,
+            k.draft,
+            k.submit,
+            k.reject,
+            k.approve,
+            k.realisasi,
+            `${pct}%`
+          ]);
+        });
+      } else if (activeTab === "prioritas") {
+        headers = [
+          "Kode SLS", "Kecamatan", "Koseka", "Pencacah (PCL)", "Pengawas (PML)", 
+          "Total Target", "DRAFT", "SUBMITTED BY Pencacah", 
+          "REJECTED BY Pengawas", "APPROVED BY Pengawas", "Progres", "Realisasi", "Realisasi (%)"
+        ];
+        sheetName = "SLS Prioritas";
+        filename = `monitoring_prioritas_${Date.now()}.xlsx`;
+
+        filteredPrioritySLS.forEach(item => {
+          const pct = item.total > 0 ? ((item.realisasi / item.total) * 100).toFixed(2) : "0.00";
+          rows.push([
+            item.slsCode,
+            formatKecName(item.namaKec),
+            item.koseka,
+            item.pencacah,
+            item.pengawas,
+            item.total,
+            item.draft,
+            item.submit,
+            item.reject,
+            item.approve,
+            item.progress,
+            item.realisasi,
+            `${pct}%`
+          ]);
+        });
+      } else {
+        headers = [
+          "Nama Petugas", "Email", "Jabatan", "Kecamatan", "Koseka", 
+          "Total Target", "DRAFT", "SUBMITTED BY Pencacah", 
+          "REJECTED BY Pengawas", "APPROVED BY Pengawas", "Progres / Realisasi", "Realisasi (%)"
+        ];
+        sheetName = `Petugas ${activeTab.toUpperCase()}`;
+        filename = `monitoring_petugas_${activeTab}_${Date.now()}.xlsx`;
+
+        filteredOfficers.forEach(o => {
+          const pct = o.total > 0 ? ((o.realisasi / o.total) * 100).toFixed(2) : "0.00";
+          rows.push([
+            o.namaPetugas,
+            o.email,
+            o.jabatanPetugas,
+            formatKecName(o.namaKec),
+            o.koseka,
+            o.total,
+            o.draft,
+            o.submit,
+            o.reject,
+            o.approve,
+            o.realisasi,
+            `${pct}%`
+          ]);
+        });
+      }
+
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      XLSX.writeFile(workbook, filename);
+    });
+  };
+
   // Highlight rules functions
   const isPmlRed = (o: OfficerStats) => {
     // PML merah jika approve dan rejectnya masih 0
@@ -970,13 +1063,22 @@ export default function PetugasPage() {
                 </div>
 
                 {/* Actions */}
-                <button
-                  onClick={handleExportCSV}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-emerald-600/10"
-                >
-                  <Download className="w-4 h-4" />
-                  Ekspor CSV
-                </button>
+                <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={handleExportCSV}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-emerald-600/10 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    Ekspor CSV
+                  </button>
+                  <button
+                    onClick={handleExportXLSX}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-blue-600/10 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    Ekspor Excel (XLSX)
+                  </button>
+                </div>
               </div>
 
               {/* Filters Panel */}

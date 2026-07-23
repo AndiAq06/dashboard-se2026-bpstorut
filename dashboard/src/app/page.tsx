@@ -704,6 +704,33 @@ export default function DashboardPage() {
     document.body.removeChild(link);
   };
 
+  const handleExportXLSX = () => {
+    import("xlsx").then((XLSX) => {
+      const headers = [
+        "Kode Identitas", "Nama Keluarga/Bangunan/Usaha", "Kecamatan", "Koseka", "Alamat Prelist", 
+        "Skala Usaha", "Status", "Petugas Saat Ini", "Keterangan", "Prioritas"
+      ];
+      
+      const rows = filteredData.map(r => [
+        r.idCode,
+        r.name,
+        r.nama_kec || "",
+        r.koseka || "",
+        r.address,
+        r.scale,
+        r.status,
+        r.officer,
+        r.notes,
+        r.isPrioritas || "Tidak"
+      ]);
+      
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Monitoring");
+      XLSX.writeFile(workbook, `filtered_monitoring_se2026_${Date.now()}.xlsx`);
+    });
+  };
+
   // Status Badge Component
   const StatusBadge = ({ status }: { status: string }) => {
     const s = status.toLowerCase().trim();
@@ -1282,14 +1309,22 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Actions / Export Button */}
-                  <div className="w-full md:w-auto flex items-center justify-end">
+                  <div className="w-full md:w-auto flex items-center justify-end gap-2">
                     <button
                       onClick={handleExportCSV}
                       className="w-full md:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-2 text-sm font-semibold bg-white dark:bg-slate-950 cursor-pointer"
                       title="Ekspor CSV Hasil Filter"
                     >
                       <Download className="w-4 h-4 text-orange-500" />
-                      <span>Ekspor Data</span>
+                      <span>Ekspor CSV</span>
+                    </button>
+                    <button
+                      onClick={handleExportXLSX}
+                      className="w-full md:w-auto px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-2 text-sm font-semibold bg-white dark:bg-slate-950 cursor-pointer"
+                      title="Ekspor Excel (XLSX) Hasil Filter"
+                    >
+                      <Download className="w-4 h-4 text-green-600" />
+                      <span>Ekspor Excel (XLSX)</span>
                     </button>
                   </div>
 
