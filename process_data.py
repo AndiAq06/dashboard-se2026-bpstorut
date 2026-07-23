@@ -1157,6 +1157,7 @@ def get_dashboard_html_template():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DASHBOARD SE2026 BPS TORAJA UTARA</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary: #ea580c;       /* Sensus Ekonomi 2026 Orange */
@@ -1457,6 +1458,27 @@ def get_dashboard_html_template():
         .btn-clear:hover {
             background-color: #e2e8f0;
             color: var(--text-main);
+        }
+
+        .btn-export {
+            padding: 0.625rem 1.25rem;
+            background-color: #10b981;
+            border: 1px solid #059669;
+            color: #ffffff;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            height: 38px;
+        }
+
+        .btn-export:hover {
+            background-color: #059669;
         }
 
         /* Tabs Container */
@@ -1946,6 +1968,13 @@ def get_dashboard_html_template():
                         <path d="M18 6 6 18M6 6l12 12"/>
                     </svg>
                     Reset Filter
+                </button>
+
+                <button class="btn-export" id="btnExportExcel" onclick="exportActiveTabToExcel()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    Unduh Excel (XLSX)
                 </button>
             </div>
         </div>
@@ -2795,6 +2824,188 @@ def get_dashboard_html_template():
                     </div>
                 </div>
             `;
+        }
+
+        function exportActiveTabToExcel() {
+            if (typeof XLSX === 'undefined') {
+                alert('Library Excel (SheetJS) belum selesai dimuat. Silakan tunggu sebentar atau muat ulang halaman.');
+                return;
+            }
+            
+            let headers = [];
+            let rows = [];
+            let filename = '';
+            let sheetName = '';
+            
+            const filtered = getFilteredData();
+            
+            if (currentTab === 'kecamatan') {
+                headers = ["No", "Kecamatan", "Jumlah SLS", "Muatan Wilkerstat", "KK", "Usaha", "Bangunan", "Draft", "Submitted", "Rejected", "Approved", "Progress Rate (%)"];
+                sheetName = "Rekap Kecamatan";
+                filename = `rekap_kecamatan_se2026_${Date.now()}.xlsx`;
+                
+                const kecMap = {};
+                const processedSls = new Set();
+                filtered.forEach(row => {
+                    const slsCode = row["SLS Code"];
+                    if (slsCode) {
+                        if (processedSls.has(slsCode)) return;
+                        processedSls.add(slsCode);
+                    }
+                    let kecName = row.nama_kec || '';
+                    kecName = kecName.trim();
+                    if (!kecName || kecName === 'TIDAK TERIDENTIFIKASI') return;
+                    if (!kecMap[kecName]) {
+                        const normKec = cleanKecNameForMatching(kecName);
+                        const targets = (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.kec_targets)
+                            ? (PETUGAS_EXCEL_TARGETS.kec_targets[normKec] || { kk: 0, usaha: 0, bangunan: 0 })
+                            : { kk: 0, usaha: 0, bangunan: 0 };
+                        kecMap[kecName] = {
+                            nama_kec: kecName, total_sls: 0, muatan: 0,
+                            kk_excel: targets.kk || 0, usaha_excel: targets.usaha || 0, bangunan_excel: targets.bangunan || 0,
+                            DRAFT: 0, SUBMITTED: 0, REJECTED: 0, APPROVED: 0
+                        };
+                    }
+                    kecMap[kecName].total_sls += 1;
+                    kecMap[kecName].muatan += Number(row.muatan_wilkerstat || 0);
+                    kecMap[kecName].DRAFT += Number(row.DRAFT || 0);
+                    kecMap[kecName].SUBMITTED += Number(row["SUBMITTED BY Pencacah"] || 0);
+                    kecMap[kecName].REJECTED += Number(row["REJECTED BY Pengawas"] || 0);
+                    kecMap[kecName].APPROVED += Number(row["APPROVED BY Pengawas"] || 0);
+                });
+                
+                const kecList = Object.values(kecMap);
+                if (sortKecField) {
+                    sortDataset(kecList, sortKecField, sortKecAsc);
+                }
+                
+                kecList.forEach((kec, idx) => {
+                    const totalTarget = kec.DRAFT + kec.SUBMITTED + kec.REJECTED + kec.APPROVED;
+                    const progress_rate = totalTarget > 0 ? (kec.APPROVED / totalTarget) * 100 : 0;
+                    rows.push([
+                        idx + 1,
+                        kec.nama_kec,
+                        kec.total_sls,
+                        kec.muatan,
+                        kec.kk_excel,
+                        kec.usaha_excel,
+                        kec.bangunan_excel,
+                        kec.DRAFT,
+                        kec.SUBMITTED,
+                        kec.REJECTED,
+                        kec.APPROVED,
+                        progress_rate.toFixed(1) + "%"
+                    ]);
+                });
+            } else if (currentTab === 'petugas') {
+                headers = ["No", "Nama Petugas", "Email", "Peran", "Total SLS", "Muatan Wilkerstat", "KK", "Usaha", "Bangunan", "Draft", "Submitted", "Rejected", "Approved", "Progress Rate (%)"];
+                sheetName = "Kinerja Petugas";
+                filename = `kinerja_petugas_se2026_${Date.now()}.xlsx`;
+                
+                const petMap = {};
+                const processedSls = new Set();
+                filtered.forEach(row => {
+                    const slsCode = row["SLS Code"];
+                    if (slsCode) {
+                        if (processedSls.has(slsCode)) return;
+                        processedSls.add(slsCode);
+                    }
+                    const email = (row.Email || '').trim().toLowerCase();
+                    const name = row.nama_petugas || '';
+                    if (!email) return;
+                    if (!petMap[email]) {
+                        const normName = cleanPetugasNameForMatching(name);
+                        const targets = (typeof PETUGAS_EXCEL_TARGETS !== 'undefined' && PETUGAS_EXCEL_TARGETS.petugas_targets)
+                            ? (PETUGAS_EXCEL_TARGETS.petugas_targets[normName] || { kk: 0, usaha: 0, bangunan: 0 })
+                            : { kk: 0, usaha: 0, bangunan: 0 };
+                        petMap[email] = {
+                            nama_petugas: name, email: email, jabatan_petugas: getNormalizedRole(row),
+                            total_sls: 0, muatan: 0,
+                            kk_excel: targets.kk || 0, usaha_excel: targets.usaha || 0, bangunan_excel: targets.bangunan || 0,
+                            DRAFT: 0, SUBMITTED: 0, REJECTED: 0, APPROVED: 0
+                        };
+                    }
+                    petMap[email].total_sls += 1;
+                    petMap[email].muatan += Number(row.muatan_wilkerstat || 0);
+                    petMap[email].DRAFT += Number(row.DRAFT || 0);
+                    petMap[email].SUBMITTED += Number(row["SUBMITTED BY Pencacah"] || 0);
+                    petMap[email].REJECTED += Number(row["REJECTED BY Pengawas"] || 0);
+                    petMap[email].APPROVED += Number(row["APPROVED BY Pengawas"] || 0);
+                });
+                
+                const petList = Object.values(petMap);
+                if (sortPetField) {
+                    sortDataset(petList, sortPetField, sortPetAsc);
+                }
+                
+                petList.forEach((pet, idx) => {
+                    const totalTarget = pet.DRAFT + pet.SUBMITTED + pet.REJECTED + pet.APPROVED;
+                    const progress_rate = totalTarget > 0 ? (pet.APPROVED / totalTarget) * 100 : 0;
+                    rows.push([
+                        idx + 1,
+                        pet.nama_petugas,
+                        pet.email,
+                        pet.jabatan_petugas,
+                        pet.total_sls,
+                        pet.muatan,
+                        pet.kk_excel,
+                        pet.usaha_excel,
+                        pet.bangunan_excel,
+                        pet.DRAFT,
+                        pet.SUBMITTED,
+                        pet.REJECTED,
+                        pet.APPROVED,
+                        progress_rate.toFixed(1) + "%"
+                    ]);
+                });
+            } else if (currentTab === 'detail') {
+                headers = ["No", "Kode SLS", "Nama Petugas", "Peran", "Kecamatan", "Prioritas", "T. Tinggal Approved", "T. Usaha Approved", "Campuran Approved", "Lainnya Approved", "KK Wilkerstat", "Usaha Wilkerstat", "Muatan", "Draft", "Submitted", "Rejected", "Approved", "Progress Rate (%)"];
+                sheetName = "Detail SLS";
+                filename = `detail_sls_se2026_${Date.now()}.xlsx`;
+                
+                const dedupedData = [];
+                const seenSls = new Set();
+                filtered.forEach(row => {
+                    const slsCode = row["SLS Code"];
+                    if (slsCode) {
+                        if (seenSls.has(slsCode)) return;
+                        seenSls.add(slsCode);
+                    }
+                    dedupedData.push(row);
+                });
+                
+                if (sortDetField) {
+                    sortDataset(dedupedData, sortDetField, sortDetAsc);
+                }
+                
+                dedupedData.forEach((row, idx) => {
+                    rows.push([
+                        idx + 1,
+                        row["SLS Code"] || '-',
+                        row.nama_petugas || '-',
+                        getNormalizedRole(row),
+                        row.nama_kec || '-',
+                        row.is_prioritas || 'Tidak',
+                        row.approve_tinggal || 0,
+                        row.approve_usaha || 0,
+                        row.approve_campuran || 0,
+                        row.approve_lainnya || 0,
+                        row.kk_wilkerstat || 0,
+                        row.usaha_wilkerstat || 0,
+                        row.muatan_wilkerstat || 0,
+                        row.DRAFT || 0,
+                        row["SUBMITTED BY Pencacah"] || 0,
+                        row["REJECTED BY Pengawas"] || 0,
+                        row["APPROVED BY Pengawas"] || 0,
+                        row.progress_rate.toFixed(1) + "%"
+                    ]);
+                });
+            }
+            
+            const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+            XLSX.writeFile(workbook, filename);
         }
     </script>
 </body>
